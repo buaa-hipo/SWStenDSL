@@ -66,9 +66,9 @@ static ParseResult parseApplyOp(OpAsmParser &parser, OperationState &state) {
             operands.push_back(currentOperand);
             operandTypes.push_back(currentType);
         } while(succeeded(parser.parseOptionalComma())); // 解析可能存在的逗号(多参数情况下)
+        if (failed(parser.parseRParen())) // 解析右括号
+            return failure();
     }
-    if (failed(parser.parseRParen())) // 解析右括号
-        return failure();
     
     // 解析结果类型
     SmallVector<Type, 8> resultTypes;
@@ -90,7 +90,7 @@ static ParseResult parseApplyOp(OpAsmParser &parser, OperationState &state) {
     ArrayAttr lbAttr, ubAttr;
     if (succeeded(parser.parseOptionalKeyword("in"))) {
         if (failed(parser.parseLParen()) // 解析左括号
-            || failed(parser.parseAttribute(lbAttr,stencil::ApplyOp::getLBAttrName(), state.attributes)) // 下界
+            || failed(parser.parseAttribute(lbAttr, stencil::ApplyOp::getLBAttrName(), state.attributes)) // 下界
             || failed(parser.parseColon()) // 解析冒号
             || failed(parser.parseAttribute(ubAttr, stencil::ApplyOp::getUBAttrName(), state.attributes)) //上界
             || failed(parser.parseRParen())) // 解析右括号
