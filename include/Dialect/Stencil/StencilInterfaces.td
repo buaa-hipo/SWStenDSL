@@ -59,4 +59,20 @@ def ShapeOp : OpInterface<"ShapeOp"> {
     ];
 }
 
+def OffsetOp : OpInterface<"OffsetOp"> {
+    let description = [{
+        Interface to get the operation offset.
+    }];
+
+    let methods = [
+        InterfaceMethod<"/* Get the offset of the operation */",
+        "Index", "getOffset", (ins), [{
+            Index result;
+            ArrayAttr offset = $_op.offset();
+            for (auto &elem : offset)
+                result.push_back(elem.cast<IntegerAttr>().getValue().getSExtValue());
+            return result;
+        }]>
+    ];
+}
 #endif // end of _DIALECT_STENCIL_STENCIL_INTERFACES_TD_

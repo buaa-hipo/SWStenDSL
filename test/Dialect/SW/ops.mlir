@@ -8,7 +8,7 @@ module {
     {
         sw.func @test(%arg0:!sw.memref<3x3x3xf64>, %arg1:!sw.memref<3x3x3xf64>) {
 
-            %15 = sw.constant 0 : i64
+            %15 = sw.getID : i64
             %16 = sw.constant 3 : i64
             %17 = sw.constant 1 : i64
             sw.for %i = %15 to %16 step %17 : i64 {
@@ -46,13 +46,14 @@ module {
                 }
                 sw.yield
             }
-
             sw.return
         }
         sw.module_end
     }
 
     sw.main_func @main(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
+        %18 = sw.alloc : !sw.memref<3x3x3xf64>
+        sw.dealloc %18 : !sw.memref<3x3x3xf64>
         sw.launch_func @test(%in:!sw.memref<1x1x1xf64>, %out:!sw.memref<2x2x2xf64>)
         sw.launch (%arg0=%in:!sw.memref<1x1x1xf64>, %arg1=%out:!sw.memref<2x2x2xf64>) :
 	        cacheRead(%cacheRead:!sw.memref<3x3x3xf64>)

@@ -718,28 +718,9 @@ static ParseResult parseForOp(OpAsmParser &parser, OperationState &state)
         || failed(parser.resolveOperand(step, inductionVariableType, state.operands)))
         return failure();
 
-    // 解析可选的初始化迭代参数
-    SmallVector<OpAsmParser::OperandType, 4> regionArgs, operands;
-    SmallVector<Type, 4> argTypes;
-    regionArgs.push_back(inductionVariable);
-    if (succeeded(parser.parseOptionalKeyword(sw::ForOp::getIterArgsAttrName()))) {
-        // 解析赋值列表和结果类型
-        if (parser.parseAssignmentList(regionArgs, operands) ||
-            parser.parseArrowTypeList(state.types))
-            return failure();
-        // 处理输入参数
-        for (auto operand_type : llvm::zip(operands, state.types))
-            if (parser.resolveOperand(
-                std::get<0>(operand_type), std::get<1>(operand_type), state.operands))
-                return failure();
-    }
-
     // 解析region域
-    argTypes.push_back(inductionVariableType);
-    argTypes.append(state.types.begin(), state.types.end());
     Region *body = state.addRegion();
-    if (failed(parser.parseRegion(*body, regionArgs, argTypes)))
-        return failure();
+    if (failed(parser.parseRegion(*body, inductionVariable, inductionVariableType)))
 
     return success();
 }
@@ -970,7 +951,6 @@ static void print(sw::ConstantOp constantOp, OpAsmPrinter &printer)
         else
             printer << "$moveToHead<-int";
     } else if (elemType.isa<mlir::FloatType>()) {
-        // printer << constantOp.value().cast<mlir::FloatAttr>().getValue();
         if (elemType.cast<mlir::FloatType>().getWidth() == 64) {
             printer << constantOp.value().cast<FloatAttr>().getValue().convertToDouble() << ";";
             printer << "$moveToHead<-double";
@@ -988,6 +968,36 @@ OpFoldResult sw::ConstantOp::fold(ArrayRef<Attribute> operands)
 {
     assert(operands.empty() && "constant has no operands");
     return getValue();
+}
+
+//============================================================================//
+// getID操作相关函数实现
+//============================================================================//
+// 解析函数
+static ParseResult parseGetIDOp(OpAsmParser &parser, OperationState &result)
+{
+    // 解析类型
+    Type type;
+    if (failed(parser.parseColonType(type)))
+        return failure();
+    
+    // 将类型设置为返回值的类型
+    return parser.addTypeToList(type, result.types);
+}
+
+// 输出函数
+static void print(sw::GetIDOp getIDOp, OpAsmPrinter &printer)
+{
+    auto elemType = getIDOp.res().getType();
+    if (elemType.isa<mlir::IntegerType>()) {
+        printer << "athread_get_id(-1);";
+        if (elemType.cast<mlir::IntegerType>().getWidth() == 64)
+            printer << "$moveToHead<-long";
+        else 
+            printer << "$moveToHead<-int";
+    } else {
+        printer << "$error";
+    }
 }
 
 //============================================================================//
@@ -1292,6 +1302,70 @@ static void print(sw::MemcpyToMEMOp memcpyToMEMOp, OpAsmPrinter &printer)
     printer << memcpyToMEMOp.stride() << TypeWidth <<", ";
     printer << memcpyToMEMOp.bsize() << TypeWidth << ");";
 }
+
+//============================================================================//
+// alloc操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseAllocOp(OpAsmParser &parser, OperationState &state)
+{
+    Type type;
+    if (failed(parser.parseColonType(type)))
+        return failure();
+
+    // 将类型设置为返回值类型
+    return parser.addTypeToList(type, state.types);
+}
+
+// 输出函数
+static void print(sw::AllocOp allocOp, OpAsmPrinter &printer)
+{
+    auto resultType = allocOp.getResult().getType().cast<sw::GridType>();
+    auto shape = resultType.getShape();
+    auto elemType = resultType.getElementType();
+    auto elemTypeString = (elemType.cast<mlir::FloatType>().getWidth() == 64) ?
+                            "double" : "float";
+    int shapeSize = 1;
+    for (int i = 0; i < shape.size(); i++) {
+        shapeSize *= shape[i];
+    }
+    auto shapeString = std::to_string(shapeSize);
+
+    printer << "malloc(sizeof(" << elemTypeString << ")*" << shapeString << ");";
+    printer << "$moveToHead<-" << elemTypeString << " *";
+}
+
+//============================================================================//
+// dealloc操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseDeAllocOp(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 8> operands;
+    SmallVector<Type, 8> operandTypes;
+    OpAsmParser::OperandType currentOperand;
+    Type currentOperandType;
+
+    if (failed(parser.parseOperand(currentOperand)))
+        return failure();
+    if (failed(parser.parseColonType(currentOperandType)))
+        return failure();
+
+    operands.push_back(currentOperand);
+    operandTypes.push_back(currentOperandType);
+    
+    // 解析参数和结果类型到state中
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
+        return failure();
+}
+
+// 输出函数
+static void print(sw::DeAllocOp deAllocOp, OpAsmPrinter &printer)
+{
+    printer << "free(" << deAllocOp.input() << ");";
+}
+
 
 namespace mlir {
 namespace sw {

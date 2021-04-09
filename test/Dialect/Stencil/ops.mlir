@@ -23,13 +23,15 @@ module {
 
                 %14 = addf %10, %11 : f64
                 %15 = addf %14, %12 : f64
-                %16 = addf %15, %13 : f64
+                %16 = subf %15, %14 : f64
+                %17 = divf %16, %15 : f64
+                %18 = addf %15, %13 : f64
 
-                %17 = stencil.store %16 : (f64) -> !stencil.result<f64>      
-                stencil.return %17 : !stencil.result<f64>       
-            } in ([0, 0] : [4, 4])
+                %19 = stencil.store %18 : (f64) -> !stencil.result<f64>      
+                stencil.return %19 : !stencil.result<f64>
+            } in ([1, 1] : [5, 5]) tile([2, 2]) cacheAt(0)
 
-            stencil.copy %0 to %out ([0, 0] : [4, 4]) : !stencil.field<6x6xf64> to !stencil.field<6x6xf64>
+            stencil.copy %0 to %out ([1, 1] : [5, 5]) : !stencil.field<6x6xf64> to !stencil.field<6x6xf64>
 
             return
         }

@@ -1,9 +1,14 @@
 # SWStenDSL
+
 A stencil domain specific language supporting Sunway TaihuLight.
 
 ## Build Instructions
 
 SWStenDSL depends on a build of llvm  including MLIR. So you need to build and install llvm first. The repository is developed based on LLVM project commit e2dee9af8db.
+
+cmake version is 3.19.7.
+
+ninja version is 1.10.2-1.
 
 ### Build LLVM project
 
@@ -25,7 +30,7 @@ https://github.com/JackMoriarty/SWStenDSL.git
 cd SWStenDSL
 export LLVM_INSTALL=<path_to_llvm_install>
 export LLVM_BUILD=<path_to_llvm_build_directory>
-make buildd && cd build
+make build && cd build
 cmake -G Ninja .. -DMLIR_DIR=$LLVM_INSTALL/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_BUILD/bin/llvm-lit
 cmake --build . --target stenCC
 ```

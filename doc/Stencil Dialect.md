@@ -25,7 +25,7 @@
      ```
                  %0 = stencil.apply(%arg0 = %in : !stencil.field<6x6xf64>, %arg1 = %parameter : !stencil.field<4xf64>)  -> !stencil.field<6x6xf64> {
                  	... ...
-                 } in ([0, 0] : [4, 4])
+                 } in ([0, 0] : [4, 4]) tile([2,2]) cacheAt(0)
      
                  
      ```

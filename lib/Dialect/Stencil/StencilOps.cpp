@@ -27,7 +27,6 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/None.h>
 #include <llvm/ADT/STLExtras.h>
-#include <llvm/ADT/STLExtras.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
 #include <algorithm>
@@ -88,11 +87,31 @@ static ParseResult parseApplyOp(OpAsmParser &parser, OperationState &state) {
 
     // 解析上下边界
     ArrayAttr lbAttr, ubAttr;
-    if (succeeded(parser.parseOptionalKeyword("in"))) {
+    if (succeeded(parser.parseKeyword("in"))) {
         if (failed(parser.parseLParen()) // 解析左括号
             || failed(parser.parseAttribute(lbAttr, stencil::ApplyOp::getLBAttrName(), state.attributes)) // 下界
             || failed(parser.parseColon()) // 解析冒号
             || failed(parser.parseAttribute(ubAttr, stencil::ApplyOp::getUBAttrName(), state.attributes)) //上界
+            || failed(parser.parseRParen())) // 解析右括号
+            return failure();
+    } else {
+        return failure();
+    }
+
+    // 解析tile
+    ArrayAttr tileAttr;
+    if (succeeded(parser.parseOptionalKeyword("tile"))) {
+        if (failed(parser.parseLParen()) // 解析左括号
+            || failed(parser.parseAttribute(tileAttr, stencil::ApplyOp::getTileAttrName(), state.attributes))
+            || failed(parser.parseRParen())) // 解析右括号
+            return failure(); 
+    }
+
+    // 解析cacheAt
+    Attribute cacheAtAttr;
+    if (succeeded(parser.parseOptionalKeyword("cacheAt"))) {
+        if (failed(parser.parseLParen()) // 解析左括号
+            || failed(parser.parseAttribute(cacheAtAttr, stencil::ApplyOp::getCacheAtAttrName(), state.attributes))
             || failed(parser.parseRParen())) // 解析右括号
             return failure();
     }
@@ -135,6 +154,20 @@ static void print(stencil::ApplyOp applyOp, OpAsmPrinter &printer) {
     printer << " : ";
     printer.printAttribute(applyOp.ub());
     printer << ")";
+    
+    // 输出tile
+    if (applyOp.tile().hasValue()) {
+        printer << " tile(";
+        printer.printAttribute(applyOp.tile().getValue());
+        printer << ")";
+    }
+
+    // 输出cacheAt
+    if (applyOp.cacheAt().hasValue()) {
+        printer << " cacheAt(";
+        printer << applyOp.cacheAt().getValue();
+        printer << ")";
+    }
 }
 
 // 获取使用了本Op返回值的Op中与返回值绑定的参数
@@ -151,11 +184,6 @@ OpOperand *stencil::StoreOp::getReturnOpOperand() {
         // 如果没有找到, 则尝试寻找scf::YieldOp (循环展开未能整除符合该情况)
         auto yieldOp = dyn_cast<scf::YieldOp>(operand->getOwner());
         if (!yieldOp)
-            return nullptr;
-        // scf::YieldOp操作嵌套在scf::ForOp中, 
-        // 同时scf::ForOp嵌套在stencil::ApplyOp的情况是不允许的
-        if (isa<scf::ForOp>(yieldOp.getParentOp()) && 
-            yieldOp.getParentOfType<stencil::ApplyOp>())
             return nullptr;
         // 在父region中继续搜索, 此时return操作使用的是yieldOp的父op的返回值
         current = yieldOp.getParentOp()->getResult(operand->getOperandNumber());
@@ -198,6 +226,8 @@ stencil::ApplyOpPattern::cleanupOpArguments(stencil::ApplyOp applyOp,
         auto newOp = rewriter.create<stencil::ApplyOp>(loc, newOperands, 
                                                     shapeOp.getLB(),
                                                     shapeOp.getUB(),
+                                                    applyOp.getTile(),
+                                                    applyOp.cacheAt(),
                                                     applyOp.getResultTypes());
         
         // 生成参数绑定关系并且移动region域

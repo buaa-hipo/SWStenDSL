@@ -39,6 +39,10 @@ public:
     static StringRef getFieldTypeName() {return "field";}
     static StringRef getResultTypeName() {return "result";}
 
+    static bool isStencilProgram(FuncOp funcOp) {
+        return !!funcOp.getAttr(getStencilProgarmAttrName());
+    }
+
     // 解析本方言中的类型
     Type parseType(DialectAsmParser &parser) const override;
     // 输出本方言中的类型

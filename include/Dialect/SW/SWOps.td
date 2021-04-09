@@ -140,8 +140,7 @@ def SW_ReturnOp : SW_Op<"return", [
 def SW_MainFuncOp : SW_Op <"main_func", [
         AutomaticAllocationScope,
         FunctionLike,
-        Symbol,
-        SingleBlockImplicitTerminator<"MainReturnOp">
+        Symbol
     ]> {
     let summary = "Function executable on mpe";
     let description = [{
@@ -285,6 +284,8 @@ def SW_LaunchOp : SW_Op<"launch", []> {
             auto end = region().front().args_end();
             return {begin, end};
         }
+        // 获取函数体
+        Block *getBody() { return &region().front(); }
     }];
 }
 
@@ -325,25 +326,20 @@ def SW_ForOp : SW_Op<"for", [
     let skipDefaultBuilders = 1;
     let builders = [
         OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value lowerBound, Value upperBound, Value step,"
-                    "ValueRange iterArgs", [{
-            // 设置上下边界以及步长
+                    "Value lowerBound, Value upperBound, Value step", [{
+            // 设置上下界以及步长
             state.addOperands({lowerBound, upperBound, step});
-            state.addOperands(iterArgs);
-
+            
             // 设置迭代变量类型
             auto region = state.addRegion();
             region->push_back(new Block());
             Block &bodyBlock = region->front();
             bodyBlock.addArgument(lowerBound.getType());
-            for (Value v : iterArgs)
-                bodyBlock.addArgument(v.getType());
         }]>
     ];
 
     // 辅助函数
     let extraClassDeclaration = [{
-        static StringRef getIterArgsAttrName() { return "iter_args"; }
         // 获取迭代变量
         Value getInductionVar() { return region().front().getArgument(0); }
         void setLowerBound(Value bound) { getOperation()->setOperand(0, bound); }
@@ -351,6 +347,7 @@ def SW_ForOp : SW_Op<"for", [
         void setStep(Value step) { getOperation()->setOperand(2, step); }
 
         unsigned int getNumControlOperands() { return 3; }
+        Block *getBody() { return &region().front(); }
     }];
 }
 
@@ -462,6 +459,28 @@ def SW_ConstantOp : SW_Op<"constant", [
         static StringRef getValueAttrName() { return "value"; }
         Attribute getValue() { return getAttr("value"); }
     }];
+}
+
+//============================================================================//
+// getID操作, 用来获取当前从核号
+//============================================================================//
+def SW_GetIDOp : SW_Op<"getID", [
+    NoSideEffect
+]> {
+    let summary = "getID";
+    let description = [{
+        This operation get the spe id.
+    }];
+
+    let results = (outs AnyType:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "TypeRange resultTypes", [{
+                state.addTypes(resultTypes);
+        }]>
+    ];
 }
 
 //============================================================================//
@@ -604,7 +623,7 @@ def SW_MulfOp : SW_Op<"mulf", []> {
 // muli操作, 整型乘法, 用于坐标运算
 //============================================================================//
 def SW_MuliOp : SW_Op<"muli", []> {
-    let summary = "integer multiplication ooperation";
+    let summary = "integer multiplication operation";
     let description = [{
         The `muli` operation takes two operands and returns one result, each of 
         these is required to be the same type.
@@ -739,4 +758,45 @@ def SW_MemcpyToMEMOp : SW_Op<"memcpyToMEM", []> {
     }];
 }
 
+//============================================================================//
+// alloc操作, 用于申请空间
+//============================================================================//
+def SW_AllocOp : SW_Op<"alloc", []> {
+    let summary = "alloc operation";
+    let description = [{
+        The `alloc` operation request a specified size of memory space.
+    }];
+
+    // 返回值
+    let results = (outs SW_MemRef:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "TypeRange resultTypes", [{
+            state.addTypes(resultTypes);
+        }]>
+    ];
+}
+//============================================================================//
+// dealloc操作, 用于释放空间
+//============================================================================//
+def SW_DeAllocOp : SW_Op<"dealloc", []> {
+    let summary = "dealloc operation";
+    let description = [{
+        The `dealloc` operation release a specified size of memory space.
+    }];
+
+    // 传入参数
+    let arguments = (ins SW_MemRef:$input);
+
+    let skipDefaultBuilders = 1;
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "Value operand", [{
+            state.addOperands(operand);
+        }]>
+    ];
+}
 #endif // end of _DIALECT_SW_SW_OPS_TD_

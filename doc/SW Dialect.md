@@ -33,8 +33,6 @@
     sw.module_end
     ```
     
-    
-
 -   func
 
     outline之后从核函数， 位于某一个module中
@@ -133,6 +131,14 @@
     $1 = sw.constant 1.000000e+00 : f64
     ```
 
+-   getID
+
+    获取当前从核号
+
+    ```
+    $1 = sw.getID : I64
+    ```
+
 -   addf
 
     加法
@@ -206,6 +212,23 @@
     sw.memcpyToMEM %ldm_addr, %mem_addr [%i, %j, %k] : z_dim(3) cnt(4) stride(5) bsize(6) : (!sw.memref<6x6x6xf64>, !sw.memref<6x6x6xf64>, i64)
     ```
 
+-   allocOp
+
+    为指定的类型申请内存空间
+
+    ```
+    %3 = sw.alloc : !sw.memref<6x6x6xf64>
+    ```
+
+-   deAllocOp
+
+    释放指定变量的内存空间
+
+    ```
+    sw.dealloc %1
+    ```
+
+-	
     ------
 
     NOTE：未来可能需要支持

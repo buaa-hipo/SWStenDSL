@@ -20,14 +20,18 @@
 
 #include "Dialect/Stencil/StencilDialect.h"
 #include "Dialect/SW/SWDialect.h"
+#include "Conversion/StencilToSW/Passes.h"
 
 using namespace mlir;
 
 int main(int argc, char *argv[])
 {
-    // registerAllDialects();
-    // registerAllPasses();
+    registerAllDialects();
+    registerAllPasses();
     
+    // register the stencil passes
+    registerStencilConversionPasses();
+
     mlir::DialectRegistry registry;
     registry.insert<stencil::StencilDialect>();
     registry.insert<sw::SWDialect>();

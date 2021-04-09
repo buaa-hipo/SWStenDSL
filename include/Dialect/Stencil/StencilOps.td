@@ -26,7 +26,9 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
     // 传入参数
     let arguments = (ins Variadic<AnyType>:$operands,
                         Stencil_Index:$lb,
-                        Stencil_Index:$ub);
+                        Stencil_Index:$ub,
+                        OptionalAttr<Stencil_Index>:$tile,
+                        OptionalAttr<I64Attr>:$cacheAt);
     // 返回值
     let results = (outs Variadic<Stencil_Field>:$res);
     // 函数域
@@ -43,11 +45,14 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
     let builders = [
         OpBuilder<"OpBuilder &builder, OperationState &state, "
                     "ValueRange operands, "
-                    "ArrayRef<int64_t> lb, ArrayRef<int64_t> ub,"
+                    "ArrayRef<int64_t> lb, ArrayRef<int64_t> ub, "
+                    "ArrayRef<int64_t> tile, Optional<long unsigned int> cacheAt, "
                     "TypeRange resultTypes", [{
             state.addOperands(operands);
             state.addAttribute(getLBAttrName(), builder.getI64ArrayAttr(lb));
             state.addAttribute(getUBAttrName(), builder.getI64ArrayAttr(ub));
+            state.addAttribute(getTileAttrName(), builder.getI64ArrayAttr(tile));
+            state.addAttribute(getCacheAtAttrName(), builder.getI64IntegerAttr(cacheAt.getValue()));
             auto region = state.addRegion();
             region->push_back(new Block());
             for (auto operand : operands) {
@@ -74,6 +79,27 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
             if (shapeOp.getRank() != fieldType.getRank())
                 return emitOpError("expected result rank to match the operation rank");
         }
+
+        // 检查是否能够被tile整除
+        if (tile().hasValue()) {
+            auto LB = shapeOp.getLB();
+            auto UB = shapeOp.getUB();
+            auto tile = getTile();
+            if (tile.size() != LB.size() || tile.size() != UB.size())
+                return emitOpError("expected tile, lb, ub have same size");
+            
+            for (int i = 0; i < tile.size(); i++) {
+                if ((UB[i] - LB[i]) % tile[i] != 0)
+                    return emitOpError("ub-lb must  be divisible by tile");
+            }
+        }
+
+        // 检查cacheAt是否不大于问题域维度
+        if (cacheAt().hasValue()) {
+            if (shapeOp.getRank() <= cacheAt().getValue())
+                return emitOpError("cacheAt is bigger then field rank");
+        }
+
         return success();
     }];
 
@@ -81,6 +107,20 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
     let extraClassDeclaration = [{
         static StringRef getLBAttrName() { return "lb"; }
         static StringRef getUBAttrName() { return "ub"; }
+        static StringRef getTileAttrName() { return "tile"; }
+        static StringRef getCacheAtAttrName() { return "cacheAt"; }
+
+        Index getTile() {
+            Index result;
+            Optional<ArrayAttr> tileAttr = tile();
+            for (auto &elem : tileAttr.getValue())
+                result.push_back(elem.cast<IntegerAttr>().getValue().getSExtValue());
+            return result;
+        }
+
+        Attribute getCacheAtAttr() { return getAttr("cacheAt"); }
+
+        Block *getBody() { return &region().front(); }
     }];
 }
 
@@ -88,7 +128,9 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
 // access操作, 访问当前位置指定偏移量位置的点
 // * 当该OP变为dead code时可以直接移去, 没有副作用
 //============================================================================//
-def Stencil_AccessOp : Stencil_Op<"access", [NoSideEffect]> {
+def Stencil_AccessOp : Stencil_Op<"access", [
+    DeclareOpInterfaceMethods<OffsetOp>,
+    NoSideEffect]> {
     let summary = "stencil access operation, visit the point at specfic offset of current point";
     let description = [{
         This operation accesses a element given a constant offset.
@@ -137,27 +179,29 @@ def Stencil_AccessOp : Stencil_Op<"access", [NoSideEffect]> {
 // load操作, 以绝对坐标访问相应位置的点, 用于数组式的参数
 // * 当该OP变为dead code时可以直接移去, 没有副作用
 //============================================================================//
-def Stencil_LoadOp : Stencil_Op<"load", [NoSideEffect]> {
+def Stencil_LoadOp : Stencil_Op<"load", [
+    DeclareOpInterfaceMethods<OffsetOp>,
+    NoSideEffect]> {
     let summary = "stencil load operation, access point at specfic position";
     let description = [{
         This operation accesses a element given a position. This operation
         is used to access element in parameter array.
     }];
     // 传入参数
-    let arguments = (ins Stencil_Field:$field, Stencil_Index:$pos);
+    let arguments = (ins Stencil_Field:$field, Stencil_Index:$offset);
     // 返回值
     let results = (outs Stencil_Element:$res);
     // IR表示形式
     let assemblyFormat = [{
-        $field $pos attr-dict-with-keyword `:` functional-type($field, $res)
+        $field $offset attr-dict-with-keyword `:` functional-type($field, $res)
     }];
 
     // 构造函数
     let builders = [
         OpBuilder<"OpBuilder &builder, OperationState & state, "
-                    "Value field, ArrayRef<int64_t> pos", [{
+                    "Value field, ArrayRef<int64_t> offset", [{
             state.addOperands(field);
-            state.addAttribute(getPosAttrName(), builder.getI64ArrayAttr(pos));
+            state.addAttribute(getOffsetAttrName(), builder.getI64ArrayAttr(offset));
             auto fieldType = field.getType().cast<stencil::GridType>();
             state.addTypes(fieldType.getElementType());
         }]>
@@ -167,7 +211,7 @@ def Stencil_LoadOp : Stencil_Op<"load", [NoSideEffect]> {
     let verifier = [{
         auto fieldType = field().getType().cast<stencil::GridType>();
         // 绝对坐标维度与域的维度必须相同
-        if (pos().size() != fieldType.getRank())
+        if (offset().size() != fieldType.getRank())
             return emitOpError("absolute position and field dimensions do not match");
         // 返回值的类型必须与域中元素类型相同
         if (res().getType() != fieldType.getElementType())
@@ -177,7 +221,7 @@ def Stencil_LoadOp : Stencil_Op<"load", [NoSideEffect]> {
 
     // 辅助函数
     let extraClassDeclaration = [{
-        static StringRef getPosAttrName() { return "pos"; }
+        static StringRef getOffsetAttrName() { return "offset"; }
     }];
 }
 
@@ -190,7 +234,7 @@ def Stencil_StoreOp : Stencil_Op<"store", []> {
         The store operation stores an operand value or nothing.
     }];
     // 传入参数
-    let arguments = (ins Optional<Stencil_Element>:$operands);
+    let arguments = (ins Variadic<Stencil_Element>:$operands);
     // 返回值
     let results = (outs Stencil_Result:$res);
     // IR表示形式
@@ -200,19 +244,21 @@ def Stencil_StoreOp : Stencil_Op<"store", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state", [{}]>,
         OpBuilder<"OpBuilder &builder, OperationState &state, "
                     "Value value", [{
-            state.addOperands(value);
+            state.addOperands({value});
             state.addTypes(stencil::ResultType::get(value.getType()));
         }]>
     ];
 
     // 有效性检查
     let verifier = [{
+        // 参数至多为一个
+        if (operands().size() > 1)
+            return emitOpError("expected at most one operand");
         // 检查返回值类型
         auto resultType = res().getType().cast<stencil::ResultType>().getResultType();
-        if (operands().getType() != resultType)
+        if (operands().size() == 1 && operands()[0].getType() != resultType)
             return emitOpError("operand type and result type are inconsistent");
         
         // 检查结果绑定
@@ -330,7 +376,9 @@ def Stencil_ReturnOp : Stencil_Op<"return", [
 //============================================================================//
 // copy操作, 将计算的结构拷贝到输出数组上
 //============================================================================//
-def Stecnil_CopyOp : Stencil_Op<"copy", []> {
+def Stecnil_CopyOp : Stencil_Op<"copy", [
+    DeclareOpInterfaceMethods<ShapeOp>
+    ]> {
     let summary = "copy operation, copy the result to output array";
     let description = [{
         This operation writes the result to the output array.
