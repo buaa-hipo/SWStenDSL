@@ -63,7 +63,6 @@ public:
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto funcOp = cast<FuncOp>(operation);
-        printf("FuncOpLowering***********\n");
         // 转化原始func操作的参数
         TypeConverter::SignatureConversion result(funcOp.getNumArguments());
         for (auto &en : llvm::enumerate(funcOp.getType().getInputs())) {
@@ -107,7 +106,6 @@ public:
         auto loc = operation->getLoc();
         auto applyOp = cast<stencil::ApplyOp>(operation);
         auto shapeOp = cast<ShapeOp>(operation);
-        printf("ApplyOpLowering***********\n");
 
         /****************** 计算cacheRead和cacheWrite的大小 *********************/
         // 获取cache所在循环位置
@@ -403,7 +401,6 @@ public:
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto accessOp = cast<stencil::AccessOp>(operation);
-        printf("AccessOpLowering***********\n");
         auto offsetOp = cast<OffsetOp>(accessOp.getOperation());
 
         // 获取基准位置, 按照约定, 收集3个即可
@@ -449,7 +446,6 @@ public:
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto loadOp = cast<stencil::LoadOp>(operation);
-        printf("LoadOpLowering***********\n");
         auto offsetOp = cast<OffsetOp>(operation);
         // 计算位置
         SmallVector<Value, 3> loadOffset;
@@ -482,7 +478,6 @@ public:
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto storeOp = cast<stencil::StoreOp>(operation);
-        printf("StoreOpLowering***********\n");
         
         // 获取对应的returnOp
         OpOperand *operand = valueToOperand[storeOp.res()];
@@ -555,7 +550,6 @@ public:
     matchAndRewrite(Operation *operation, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const override {
         // 直接删除
-        printf("ReturnOpLowering***********\n");
         rewriter.eraseOp(operation);
         return success();
     }
@@ -570,7 +564,6 @@ public:
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto copyOp = cast<stencil::CopyOp>(operation);
-        printf("CopyOpLowering***********\n");
         // 获取参数
         auto result = operands[0];
         auto output = operands[1];
@@ -612,7 +605,6 @@ public:
         auto loc = operation->getLoc();
         auto constantOp = cast<ConstantOp>(operation);
         auto value = constantOp.value();
-        printf("ConstantOpLowering***********\n");
         
         // 直接替换
         Value constantValue = rewriter.create<sw::ConstantOp>(loc, value, value.getType());
@@ -630,7 +622,6 @@ public:
                         ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto addfOp = cast<AddFOp>(operation);
-        printf("AddfOpLowering***********\n");
 
         // 直接替换
         auto result = addfOp.getResult();
@@ -649,7 +640,6 @@ public:
                         ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto subfOp = cast<SubFOp>(operation);
-        printf("SubfOpLowering***********\n");
 
         // 直接替换
         auto result = subfOp.getResult();
@@ -668,7 +658,6 @@ public:
                         ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto mulfOp = cast<MulFOp>(operation);
-        printf("MulfOpLowering***********\n");
 
         // 直接替换
         auto result = mulfOp.getResult();
@@ -687,7 +676,6 @@ public:
                         ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto divfOp = cast<DivFOp>(operation);
-        printf("DivfOpLowering***********\n");
 
         // 直接替换
         auto result = divfOp.getResult();

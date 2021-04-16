@@ -18,7 +18,7 @@ namespace mlir {
 class Pass;
 
 std::unique_ptr<Pass> createConvertStencilToSWPass();
-// std::unique_ptr<Pass> createSWOutliningPass();
+std::unique_ptr<Pass> createSWOutliningPass();
 
 //============================================================================//
 // 注册

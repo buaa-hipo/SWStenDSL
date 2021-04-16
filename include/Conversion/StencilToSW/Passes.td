@@ -8,9 +8,9 @@ def StencilToSWPass : Pass<"convert-stencil-to-sw", "ModuleOp"> {
     let constructor = "mlir::createConvertStencilToSWPass()";
 }
 
-// def SWOutliningPass : Pass<"sw-outlining", "ModuleOp"> {
-//     let summary = "Outlining the launchOp";
-//     let constructor = "mlir::createSWOutliningPass()";
-// }
+def SWOutliningPass : Pass<"sw-outlining", "ModuleOp"> {
+    let summary = "Outlining the launchOp";
+    let constructor = "mlir::createSWOutliningPass()";
+}
 
 #endif // _CONVERSION_STENCILTOSW_PASS_TD_
