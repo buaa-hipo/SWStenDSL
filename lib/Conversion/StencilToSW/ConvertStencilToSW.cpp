@@ -225,10 +225,9 @@ public:
                 // 原输入信息
                 auto elem = applyOp.region().getArgument(en);
                 auto elemShape = elem.getType().cast<stencil::GridType>().getShape();
-                auto elemType_size = elem.getType().cast<stencil::GridType>().getElementType().cast<mlir::FloatType>().getWidth() / 8;
                 // 对应的cacheRead参数信息
                 auto elem_parameter = launchOp.getCacheReadAttributions()[en];
-                int64_t dma_size = elemType_size;
+                int64_t dma_size = 1;
                 for (int i = 0; i < elemShape.size(); i++) {
                     dma_size *= elemShape[i];
                     index_0.push_back(value_0);
@@ -240,7 +239,8 @@ public:
         }
 
         // 创建sw.for嵌套循环
-        SmallVector<Value, 6> inductionVars;
+        SmallVector<Value, 6> inductionVars; ///< 记录嵌套循环的迭代变量
+        SmallVector<Value, 3> innerLoopBasePos; ///< 记录内层循环访问cacheRead数组的出发位置, 将来加上内层循环索引即可得基准位置
         sw::ForOp forOp = rewriter.create<sw::ForOp>(loc, lbs[0], ubs[0], steps[0]);
         inductionVars.push_back(forOp.getInductionVar());
         auto loop_tile = applyOp.getTile();
@@ -254,7 +254,6 @@ public:
                     // 原输入参数信息
                     auto elem = applyOp.region().getArgument(en);
                     auto elemShape = elem.getType().cast<stencil::GridType>().getShape();
-                    auto elemType_size = elem.getType().cast<stencil::GridType>().getElementType().cast<mlir::FloatType>().getWidth() / 8;
                     // 对应的cacheRead参数信息
                     auto elem_cacheRead = launchOp.getCacheReadAttributions()[en];
                     auto elem_cacheReadShape = elem_cacheRead.getType().cast<sw::GridType>().getShape();
@@ -273,15 +272,16 @@ public:
                     }
 
                     // 计算z_dim参数
-                    int64_t zDim = (elemShape.size() == 3) ? elemShape[0] : 1;
+                    int64_t zDim = (elemShape.size() == 3) ? elem_cacheReadShape[0] : 1;
                     auto zDimAttr = rewriter.getI64IntegerAttr(zDim);
-                    // 计算cnt参数
-                    int64_t cnt = elemType_size;
-                    for (int iter = 0; iter < elemShape.size(); iter++) {
-                        if (iter > cacheAt)
-                            cnt *= elemShape[iter];
-                        else 
-                            cnt *= elem_cacheReadShape[iter];
+                    // 计算cnt参数, 按面加载, 不计算三维情况的最高维度
+                    int64_t cnt = 1;
+                    int iter = 0;
+                    if (elemShape.size() == 3) {
+                        iter = 1;
+                    }
+                    for (; iter < elemShape.size(); iter++) {
+                        cnt *= elem_cacheReadShape[iter];
                     }
                     auto cntAttr = rewriter.getI64IntegerAttr(cnt);
                     // 计算bsize参数
@@ -294,6 +294,21 @@ public:
                     rewriter.create<sw::MemcpyToLDMOp>(loc, launchOpArg[en], elem_cacheRead, indexArray, zDimAttr, cntAttr, strideAttr, bsizeAttr);
                 }
             }
+
+            // 插入该层循环的出发位置
+            if (i-1 < shapeOp.getRank()) {
+                Value halo_l = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(shapeOp.getLB()[i-1]), rewriter.getI64Type());
+                if (i-1 <= cacheAt) {
+                    // 对于cacheAt之外的外层循环, 对应的出发位置为相应的halo_left
+                    innerLoopBasePos.push_back(halo_l);
+                } else {
+                    // 对于cacheAt之内的最外层循环, 对应的出发位置为外层循环的索引*相应的tile值+halo_left
+                    Value tile = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(loop_tile[i-1]), rewriter.getI64Type());
+                    Value multiResult = rewriter.create<sw::MuliOp>(loc, rewriter.getI64Type(), inductionVars[i-1], tile);
+                    Value multiAddResult = rewriter.create<sw::AddiOp>(loc, rewriter.getI64Type(), multiResult, halo_l);
+                    innerLoopBasePos.push_back(multiAddResult);
+                }
+            }
             forOp = rewriter.create<sw::ForOp>(loc, lbs[i], ubs[i], steps[i]);
             inductionVars.push_back(forOp.getInductionVar());
             // 插入DMA到MEM操作
@@ -303,34 +318,36 @@ public:
                     // 原结果信息
                     auto elem = applyOp.getResult(en.index());
                     auto elemShape = elem.getType().cast<stencil::GridType>().getShape();
-                    auto elemType_size = elem.getType().cast<stencil::GridType>().getElementType().cast<mlir::FloatType>().getWidth() / 8;
                     // 对应的cacheWrite信息
                     auto elem_cacheWrite = en.value();
                     auto elem_cacheWriteShape = elem_cacheWrite.getType().cast<sw::GridType>().getShape();
 
-                    // 计算索引
+                    // 计算索引, 写回时要加上偏移量, 确保位置正确
                     SmallVector<Value, 3> indexArray;
                     indexArray.clear();
                     for (int iter = 0; iter < elemShape.size(); iter++) {
+                        Value halo_l = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(shapeOp.getLB()[iter]), rewriter.getI64Type());
                         if (iter <= cacheAt) {
                             Value tile_size = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(loop_tile[iter]), rewriter.getI64Type());
-                            Value index = rewriter.create<sw::MuliOp>(loc, rewriter.getI64Type(), inductionVars[iter], tile_size);
+                            Value base = rewriter.create<sw::MuliOp>(loc, rewriter.getI64Type(), inductionVars[iter], tile_size);
+                            Value index = rewriter.create<sw::AddiOp>(loc, rewriter.getI64Type(), base, halo_l);
                             indexArray.push_back(index);
                         } else {
-                            indexArray.push_back(value_0);
+                            indexArray.push_back(halo_l);
                         }
                     }
 
                     // 计算z_dim参数
-                    int64_t zDim = (elemShape.size() == 3) ? elemShape[0] : 1;
+                    int64_t zDim = (elemShape.size() == 3) ? elem_cacheWriteShape[0] : 1;
                     auto zDimAttr = rewriter.getI64IntegerAttr(zDim);
-                    // 计算cnt参数
-                    int64_t cnt = elemType_size;
-                    for (int iter = 0; iter < elemShape.size(); iter++) {
-                        if (iter > cacheAt) 
-                            cnt *= elemShape[iter];
-                        else
-                            cnt *= elem_cacheWriteShape[iter];
+                    // 计算cnt参数, 按面加载, 不计算三维情况的最高维度
+                    int64_t cnt = 1;
+                    int iter = 0;
+                    if (elemShape.size() == 3) {
+                        iter = 1;
+                    }
+                    for (; iter < elemShape.size(); iter++) {
+                        cnt *= elem_cacheWriteShape[iter];
                     }
                     auto cntAttr = rewriter.getI64IntegerAttr(cnt);
                     // 计算bsize参数
@@ -351,21 +368,10 @@ public:
         rewriter.setInsertionPointToEnd(forOp.getBody());
         rewriter.create<sw::YieldOp>(loc);
         // NOTICE: 此处强制约定最内层循环的前2-3个AddiOp操作对应的为基准位置, 方便后面的操作查找基准位置
-        // 在最内层循环开头插入索引基点计算
+        // 在最内层循环开头插入索引基点计算, 基准位置为出发位置加上相应的内层循环索引
         rewriter.setInsertionPointToStart(forOp.getBody());
         for (int i = 0; i < shapeOp.getLB().size(); i++) {
-            if (i <= cacheAt) {
-                // 该层循环被tile
-                // 内层循环索引+halo_size
-                Value halo_l = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(shapeOp.getLB()[i]), rewriter.getI64Type());
-                rewriter.create<sw::AddiOp>(loc, rewriter.getI64Type(), inductionVars[i], halo_l);
-            } else {
-                // 该层循环未被tile
-                // 外层循环索引x内层循环索引+halo_size
-                Value halo_l = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(shapeOp.getLB()[i]), rewriter.getI64Type());
-                Value multiResult = rewriter.create<sw::MuliOp>(loc, rewriter.getI64Type(), inductionVars[i+shapeOp.getLB().size()], inductionVars[i]);
-                rewriter.create<sw::AddiOp>(loc, rewriter.getI64Type(), multiResult, halo_l);
-            }
+            rewriter.create<sw::AddiOp>(loc, rewriter.getI64Type(), innerLoopBasePos[i], inductionVars[i+shapeOp.getLB().size()]);
         }
 
         // 转化apply操作签名

@@ -74,13 +74,14 @@ class SWOutliningPass : public SWOutliningPassBase<SWOutliningPass> {
 public:
     void runOnOperation() override {
         SymbolTable symbolTable(getOperation());
-        bool modified = false;
+        int kernelCounter = 0;
         for (auto func : getOperation().getOps<sw::MainFuncOp>()) {
             // 将生成的spe func插入到当前func的前面
             Block::iterator insertPt(func.getOperation());
             auto funcWalkResult = func.walk([&](sw::LaunchOp op) {
                 std::string kernelFnName = 
-                    Twine(op.getParentOfType<sw::MainFuncOp>().getName(), "_kernel").str();
+                    Twine(op.getParentOfType<sw::MainFuncOp>().getName(), "_kernel").str() + std::to_string(kernelCounter);
+                kernelCounter ++;
 
                 SmallVector<Type, 8> cacheReadAttr;
                 SmallVector<Type, 8> cacheWriteAttr;

@@ -18,6 +18,10 @@ spe_func_move_into_region = ''
 spe_func_counter = 0
 spe_kernel_counter = 0
 output_file=None
+discrete_var = 0    # 这个变量用于将主核, 从核使用的变量名称做区分, 
+                    # 使变量的形式为value$(discrete_var)_[0-9]+,
+                    # 从而避免从核__thread_local变量重定义问题
+
 #输出文件
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
     for line in f.readlines():
@@ -27,15 +31,18 @@ with open(sys.argv[1], 'r', encoding='utf-8') as f:
             # 存在，则说明该行需要执行相应$命令
             if (line.find("moduleBegin") != -1): # spe_module开始命令
                 is_in_spe_module = True
-                output_file = open("kernel"+str(spe_kernel_counter)+"_slave.c", 'w')
+                output_file = open("kernel"+sys.argv[1]+str(spe_kernel_counter)+"_slave.c", 'w')
             elif (line.find("moduleEnd") != -1): # spe_module结束命令
                 is_in_spe_module = False
+                spe_kernel_counter = spe_kernel_counter + 1
+                discrete_var = discrete_var + 1
                 output_file.close()
             elif (line.find("mainModuleBegin") != -1): # mpe_module开始命令
                 is_in_mpe_module = True
-                output_file = open("kernel"+sys.argv[1]+".c", 'w')
+                output_file = open("kernel"+sys.argv[1]+"_master.c", 'w')
             elif (line.find("mainModuleEnd") != -1): # mpe_module结束命令
                 is_in_mpe_module = False
+                discrete_var = discrete_var + 1
                 output_file.close()
             elif (line.find("shareBegin") != -1): # share域开始命令
                 is_in_share = True
@@ -83,7 +90,7 @@ with open(sys.argv[1], 'r', encoding='utf-8') as f:
         elif (is_in_mpe_module):
             # 该行不存在$命令, 但是在main_module中
             output_string = line
-        output_string = output_string.replace("%", "value_")
+        output_string = output_string.replace("%", "value"+str(discrete_var)+"_")
         print(output_string, end='')
         if (len(output_string) != 0):
             output_file.write(output_string)
