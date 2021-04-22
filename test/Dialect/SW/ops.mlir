@@ -2,11 +2,11 @@
 
 module {
         
-    sw.module @symbol_name :
-    cacheRead(%cacheRead1:!sw.memref<1x1x1xf64>, %cacheRead2:!sw.memref<2x2x2xf64>)
-    cacheWrite(%cacheWrite1: !sw.memref<3x3x3xf64>, %cacheWrite2:!sw.memref<4x4x4xf64>)
+    sw.module @symbol_name
     {
-        sw.func @test(%arg0:!sw.memref<3x3x3xf64>, %arg1:!sw.memref<3x3x3xf64>) {
+        sw.func @test(%arg0:!sw.memref<3x3x3xf64>, %arg1:!sw.memref<3x3x3xf64>) 
+            cacheRead(%cacheRead1:!sw.memref<1x1x1xf64>, %cacheRead2:!sw.memref<2x2x2xf64>)
+            cacheWrite(%cacheWrite1: !sw.memref<3x3x3xf64>, %cacheWrite2:!sw.memref<4x4x4xf64>){
 
             %15 = sw.getID : i64
             %16 = sw.constant 3 : i64

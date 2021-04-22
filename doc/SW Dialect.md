@@ -17,14 +17,12 @@
     包围生成为从核函数的代码，每个从核函数都有一个相对应的module
 
     ```
-    sw.module @symbol_name :
-    	cacheRead(%cacheRead:!sw.memref<3x3x3xf64>)
-    	cacheWrite(%cacheWrite:!sw.memref<3x3x3xf64>)
+    sw.module @symbol_name
     {
         ...
     }
     ```
-
+    
 -   module_end
 
     module的终结符
@@ -38,7 +36,7 @@
     outline之后从核函数， 位于某一个module中
 
     ```
-    sw.func @foo(%arg0: index) {
+    sw.func @foo(%arg0: index) 	cacheRead(%cacheRead:!sw.memref<3x3x3xf64>) cacheWrite(%cacheWrite:!sw.memref<3x3x3xf64>) {
     	...
     }
     ```

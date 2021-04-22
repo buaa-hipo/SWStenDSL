@@ -235,19 +235,6 @@ static ParseResult parseModuleOp(OpAsmParser &parser, OperationState &state)
                                 state.attributes))
         return failure();
 
-    if (failed(parser.parseColon())) // 解析冒号
-        return failure();
-    // 解析cacheRead属性信息
-    if (failed(parseAttributions(parser, sw::ModuleOp::getCacheReadAttrName(), entryArgs, argTypes)))
-        return failure();
-    unsigned int cacheRead_num = entryArgs.size();
-    state.addAttribute(sw::ModuleOp::getCacheReadAttrNumName(), builder.getI64IntegerAttr(cacheRead_num));
-
-    // 解析cacheWrite属性信息
-    if (failed(parseAttributions(parser, sw::ModuleOp::getCacheWriteAttrName(), entryArgs, argTypes)))
-        return failure();
-    state.addAttribute(sw::ModuleOp::getCacheWriteAttrNumName(), builder.getI64IntegerAttr(entryArgs.size()-cacheRead_num));
-    
     // 解析region域
     auto *body = state.addRegion();
     if (parser.parseRegion(*body, entryArgs, argTypes))
@@ -285,15 +272,6 @@ static void print(sw::ModuleOp moduleOp, OpAsmPrinter &printer)
     printer << "\t\tathread_put(PE_MODE, &src, &dst, cnt, &put_reply, stride, bsize); \\\n";
     printer << "\twhile(put_reply != z_dim_size); \\\n";
     printer << "}\n";
-
-    // 输出cacheRead 和 cacheWrite数组
-    printer << "__thread_local ";
-    printAttributions(printer, moduleOp.getCacheReadAttributions());
-    printer << "; // cacheRead\n";
-    
-    printer << "__thread_local ";
-    printAttributions(printer, moduleOp.getCacheWriteAttributions());
-    printer << "; // cacheWrite\n";
     
     // 输出域
     printer << "\n$delete";
@@ -350,6 +328,17 @@ static ParseResult parseFuncOp(OpAsmParser &parser, OperationState &state)
     auto type = builder.getFunctionType(argTypes, resultTypes);
     state.addAttribute(FuncOp::getTypeAttrName(), TypeAttr::get(type));
 
+    // 解析cacheRead属性信息
+    if (failed(parseAttributions(parser, sw::FuncOp::getCacheReadAttrName(), entryArgs, argTypes)))
+        return failure();
+    unsigned int cacheRead_num = entryArgs.size();
+    state.addAttribute(sw::FuncOp::getCacheReadAttrNumName(), builder.getI64IntegerAttr(cacheRead_num));
+
+    // 解析cacheWrite属性信息
+    if (failed(parseAttributions(parser, sw::FuncOp::getCacheWriteAttrName(), entryArgs, argTypes)))
+        return failure();
+    state.addAttribute(sw::FuncOp::getCacheWriteAttrNumName(), builder.getI64IntegerAttr(entryArgs.size()-cacheRead_num));
+
     // 解析域
     auto *body = state.addRegion();
     return parser.parseRegion(*body, entryArgs, argTypes);
@@ -382,6 +371,12 @@ static void print(sw::FuncOp funcOp, OpAsmPrinter &printer)
 
     // 输出初始化部分, 该部分要移动到域中, 交由后期处理
     printer << "$moveInToRegionBegin\n";
+    // 输出cacheRead 和 cacheWrite数组
+    printAttributions(printer, funcOp.getCacheReadAttributions());
+    printer << "; // cacheRead\n";
+    
+    printAttributions(printer, funcOp.getCacheWriteAttributions());
+    printer << "; // cacheWrite\n";
     struct_arg_counter = 0;
     for (int iter = 0; iter < argTypes.size(); iter++) {
         auto elemType = argTypes[iter].cast<mlir::sw::GridType>().getElementType();

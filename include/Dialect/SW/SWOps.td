@@ -26,48 +26,12 @@ def SW_ModuleOp : SW_Op<"module", [
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                                "StringRef name, ArrayRef<Type> cacheRead, "
-                                "ArrayRef<Type> cacheWrite", [{
+        OpBuilder<"OpBuilder &builder, OperationState &state, StringRef name", [{
             state.addAttribute(::mlir::SymbolTable::getSymbolAttrName(), builder.getStringAttr(name));
-            state.addAttribute(getCacheReadAttrNumName(), builder.getI64IntegerAttr(cacheRead.size()));
-            state.addAttribute(getCacheWriteAttrNumName(), builder.getI64IntegerAttr(cacheWrite.size()));
             auto region = state.addRegion();
             region->push_back(new Block());
-            region->front().addArguments(cacheRead);
-            region->front().addArguments(cacheWrite);
         }]>
     ];
-
-    // 辅助函数
-    let extraClassDeclaration = [{
-        static StringRef getCacheReadAttrName() { return "cacheRead"; }
-        static StringRef getCacheWriteAttrName() { return "cacheWrite"; }
-        static StringRef getCacheReadAttrNumName() {return "cacheReadAttrNum"; }
-        static StringRef getCacheWriteAttrNumName() { return "cacheWriteAttrNum"; }
-
-        // 返回cacheRead属性的数量
-        unsigned int getNumCacheReadAttributions() {
-            return getAttrOfType<IntegerAttr>(getCacheReadAttrNumName()).getInt();
-        }
-        // 返回cacheWrite属性的数量
-        unsigned int getNumCacheWriteAttributions() {
-            return getAttrOfType<IntegerAttr>(getCacheWriteAttrNumName()).getInt();
-        }
-        // 返回所有cacheRead属性
-        ArrayRef<BlockArgument> getCacheReadAttributions() {
-            auto begin = getBody()->args_begin();
-            auto end = std::next(begin, getNumCacheReadAttributions());
-
-            return {begin, end};
-        }
-        // 返回所有cacheWrite属性
-        ArrayRef<BlockArgument> getCacheWriteAttributions() {
-            auto begin = std::next(getBody()->args_begin(), getNumCacheReadAttributions());
-            auto end = getBody()->args_end();
-            return {begin, end};
-        }
-    }];
 }
 
 //============================================================================//
@@ -88,7 +52,7 @@ def SW_ModuleEndOp : SW_Op<"module_end", [
 def SW_FuncOp : SW_Op<"func", [
     HasParent<"ModuleOp">,
     AutomaticAllocationScope,
-    FunctionLike,
+    // FunctionLike,
     Symbol,
     SingleBlockImplicitTerminator<"ReturnOp">]> {
     let summary = "Function executable on spe";
@@ -102,21 +66,59 @@ def SW_FuncOp : SW_Op<"func", [
     // 构造函数
     let builders = [
         OpBuilder<"OpBuilder &builder, OperationState &state, StringRef name, "
-                    "FunctionType type", [{
+                    "FunctionType type, ArrayRef<Type> cacheRead, "
+                    "ArrayRef<Type> cacheWrite", [{
             state.addAttribute(SymbolTable::getSymbolAttrName(), 
                                 builder.getStringAttr(name));
             state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
+            state.addAttribute(getCacheReadAttrNumName(), builder.getI64IntegerAttr(cacheRead.size()));
+            state.addAttribute(getCacheWriteAttrNumName(), builder.getI64IntegerAttr(cacheWrite.size()));
             Region *body = state.addRegion();
             Block *entryBlock = new Block;
             entryBlock->addArguments(type.getInputs());
+            entryBlock->addArguments(cacheRead);
+            entryBlock->addArguments(cacheWrite);
             body->getBlocks().push_back(entryBlock);
         }]>
     ];
 
     // 辅助函数
     let extraClassDeclaration = [{
+
+        static StringRef getTypeAttrName() { return "type"; }
+        static StringRef getCacheReadAttrName() { return "cacheRead"; }
+        static StringRef getCacheWriteAttrName() { return "cacheWrite"; }
+        static StringRef getCacheReadAttrNumName() {return "cacheReadAttrNum"; }
+        static StringRef getCacheWriteAttrNumName() { return "cacheWriteAttrNum"; }
+
+        FunctionType getType() {
+            return getAttrOfType<TypeAttr>(getTypeAttrName()).getValue().cast<FunctionType>();
+        }
+
         unsigned int getNumFuncArguments() { return getType().getNumInputs(); }
         unsigned int getNumFuncResults() { return getType().getNumResults(); }
+
+        // 返回cacheRead属性的数量
+        unsigned int getNumCacheReadAttributions() {
+            return getAttrOfType<IntegerAttr>(getCacheReadAttrNumName()).getInt();
+        }
+        // 返回cacheWrite属性的数量
+        unsigned int getNumCacheWriteAttributions() {
+            return getAttrOfType<IntegerAttr>(getCacheWriteAttrNumName()).getInt();
+        }
+        // 返回所有cacheRead属性
+        ArrayRef<BlockArgument> getCacheReadAttributions() {
+            auto begin = std::next(getBody()->args_begin(), getType().getNumInputs());
+            auto end = std::next(begin, getNumCacheReadAttributions());
+
+            return {begin, end};
+        }
+        // 返回所有cacheWrite属性
+        ArrayRef<BlockArgument> getCacheWriteAttributions() {
+            auto begin = std::next(getBody()->args_begin(), getType().getNumInputs()+getNumCacheReadAttributions());
+            auto end = getBody()->args_end();
+            return {begin, end};
+        }
     }];
 }
 

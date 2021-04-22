@@ -22,7 +22,9 @@
 using namespace mlir;
 
 // 将sw::LaunchOp的域移动到一个spe函数中, 并将sw.terminator操作替换为sw.return.
-static sw::FuncOp outlineKernelFuncImpl(sw::LaunchOp launchOp, StringRef kernelFnName)
+static sw::FuncOp outlineKernelFuncImpl(sw::LaunchOp launchOp, StringRef kernelFnName,
+                                            ArrayRef<Type> cacheReadAttr,
+                                            ArrayRef<Type> cacheWriteAttr)
 {
     Location loc = launchOp.getLoc();
     ValueRange operands = launchOp.getOperands();
@@ -37,7 +39,8 @@ static sw::FuncOp outlineKernelFuncImpl(sw::LaunchOp launchOp, StringRef kernelF
     }
     FunctionType type =
         FunctionType::get(kernelOperandTypes, {}, launchOp.getContext());
-    auto outlinedFunc = builder.create<sw::FuncOp>(loc, kernelFnName, type);
+    auto outlinedFunc = builder.create<sw::FuncOp>(loc, kernelFnName, type, 
+                                                cacheReadAttr, cacheWriteAttr);
     // 删除操作自行生成的Block
     outlinedFunc.region().getBlocks().back().erase();
 
@@ -92,9 +95,8 @@ public:
                     cacheWriteAttr.push_back(elem.getType());
                 }
                 sw::FuncOp outlinedFunc = 
-                    outlineKernelFuncImpl(op, kernelFnName);
-                auto kernelModule = createKernelModule(outlinedFunc, symbolTable, 
-                    cacheReadAttr, cacheWriteAttr);
+                    outlineKernelFuncImpl(op, kernelFnName, cacheReadAttr, cacheWriteAttr);
+                auto kernelModule = createKernelModule(outlinedFunc, symbolTable);
                 symbolTable.insert(kernelModule, insertPt);
 
                 // 删除原有的launch操作, 并替换为launch_func操作
@@ -110,40 +112,18 @@ public:
 private:
     // 创建并返回一个包含kernelFunc的sw::ModuleOp
     sw::ModuleOp createKernelModule(sw::FuncOp kernelFunc,
-                                        const SymbolTable &parentSymbolTable,
-                                        ArrayRef<Type> cacheReadAttr,
-                                        ArrayRef<Type> cacheWriteAttr) {
+                                        const SymbolTable &parentSymbolTable) {
         auto context = getOperation().getContext();
         OpBuilder builder(context);
         OperationState state(kernelFunc.getLoc(), sw::ModuleOp::getOperationName());
 
-        sw::ModuleOp::build(builder, state, kernelFunc.getName(), cacheReadAttr, cacheWriteAttr);
+        sw::ModuleOp::build(builder, state, kernelFunc.getName());
         auto kernelModule = cast<sw::ModuleOp>(Operation::create(state));
         // 在kernelModule的末尾插入终结符号
         builder.setInsertionPointToEnd(kernelModule.getBody());
         builder.create<sw::ModuleEndOp>(kernelFunc.getLoc());
         SymbolTable symbolTable(kernelModule);
         symbolTable.insert(kernelFunc);
-
-        // 用module中的cacheRead和cacheWrite替换kernelFunc中对cacheRead和cacheWrite
-        // Argument的引用, 并删除kernelFunc的cacheRead和cacheWrite Argument
-        int kernelFuncOperandsNum = kernelFunc.getNumFuncArguments();
-        // 标准的func中是没有cacheRead和cacheWrite属性的, 之间拷贝body的时候未移除, 为权宜之计
-        int kernelFuncCacheReadWriteAttrNum = 
-            kernelFunc.region().front().getNumArguments() - kernelFuncOperandsNum;
-        auto kernelModuleArgument = kernelModule.region().front().getArguments();
-        auto kernelFuncArgument = kernelFunc.region().front().getArguments();
-        for (int i = 0; i < kernelFuncCacheReadWriteAttrNum; i++) {
-            Value moduleArg = kernelModuleArgument[i];
-            Value funcArg = kernelFuncArgument[kernelFuncOperandsNum + i];
-            funcArg.replaceAllUsesWith(moduleArg);
-        }
-        // 删除func中的cacheRead和cacheWrite属性
-        Block *funcBody = &(kernelFunc.region().front());
-        for (int i = kernelFuncCacheReadWriteAttrNum-1; i >=0; i--) {
-            int index = i + kernelFuncOperandsNum;
-            funcBody->eraseArgument(index);
-        }
 
         SmallVector<Operation *, 8> symbolDefWorklist = {kernelFunc};
         while (!symbolDefWorklist.empty()) {

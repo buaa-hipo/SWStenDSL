@@ -18,7 +18,7 @@ module {
 
             %11 = stencil.store %10 : (f64) -> !stencil.result<f64>
             stencil.return %11 : !stencil.result<f64>
-        } in ([1, 1, 0] : [71, 17, 16]) tile([5, 4, 4]) cacheAt(1)
+        } in ([1, 1, 0] : [71, 17, 16]) tile([5, 4, 4]) cacheAt(0)
 
         %12 = stencil.apply(%arg1 = %in : !stencil.field<72x18x16xf64>, %arg2 = %0 : !stencil.field<72x18x16xf64>) -> !stencil.field<72x18x16xf64> {
             %13 = stencil.access %arg1 [0, 0, 0] : (!stencil.field<72x18x16xf64>) -> f64
@@ -27,7 +27,7 @@ module {
             %15 = addf %13, %14 : f64
             %16 = stencil.store %15 : (f64) -> !stencil.result<f64>
             stencil.return %16 : !stencil.result<f64>
-        } in ([1, 1, 0] : [71, 17, 16]) tile([5, 4, 4]) cacheAt(1)
+        } in ([1, 1, 0] : [71, 17, 16]) tile([5, 4, 4]) cacheAt(0)
 
         stencil.copy %12 to %out ([1, 1, 0] : [71, 17, 16]) : !stencil.field<72x18x16xf64> to !stencil.field<72x18x16xf64>
         return
