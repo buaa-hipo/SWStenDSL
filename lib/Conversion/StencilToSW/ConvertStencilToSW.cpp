@@ -63,35 +63,57 @@ public:
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto funcOp = cast<FuncOp>(operation);
+
         // 转化原始func操作的参数
         TypeConverter::SignatureConversion result(funcOp.getNumArguments());
         for (auto &en : llvm::enumerate(funcOp.getType().getInputs())) {
             result.addInputs(en.index(), typeConverter.convertType(en.value()));
-
         }
 
-        // 创建新函数
+        // 创建新函数类型
         auto funcType =
             FunctionType::get(result.getConvertedTypes(),
                             funcOp.getType().getResults(), funcOp.getContext());
-        auto newFuncOp =
-            rewriter.create<sw::MainFuncOp>(loc, funcOp.getName(), funcType);
-        // 删除自己创建的block
-        rewriter.eraseBlock(&newFuncOp.getBody().getBlocks().back());
 
-        // 复制域
-        rewriter.inlineRegionBefore(funcOp.getBody(), newFuncOp.getBody(),
-                                    newFuncOp.end());        
-        // 删除原有std终结符并在函数域中插入终结符
-        auto stdReturnOp = newFuncOp.getBody().front().getTerminator();
-        rewriter.eraseOp(stdReturnOp);
-        rewriter.setInsertionPointToEnd(&newFuncOp.getBody().front());
-        rewriter.create<sw::MainReturnOp>(loc);
+        // 对于描述stencil计算的func部分
+        if (StencilDialect::isStencilProgram(funcOp)) {
+            auto newFuncOp = rewriter.create<sw::MainFuncOp>(loc, funcOp.getName(), funcType);
+            // 删除自己创建的block
+            rewriter.eraseBlock(&newFuncOp.getBody().getBlocks().back());
 
-        // 转换签名
-        rewriter.applySignatureConversion(&newFuncOp.getBody(), result);
+            // 复制域
+            rewriter.inlineRegionBefore(funcOp.getBody(), newFuncOp.getBody(),
+                                        newFuncOp.end());        
+            // 删除原有std终结符并在函数域中插入终结符
+            auto stdReturnOp = newFuncOp.getBody().front().getTerminator();
+            rewriter.eraseOp(stdReturnOp);
+            rewriter.setInsertionPointToEnd(&newFuncOp.getBody().front());
+            rewriter.create<sw::MainReturnOp>(loc);
+
+            // 转换签名
+            rewriter.applySignatureConversion(&newFuncOp.getBody(), result);
+        } else if (StencilDialect::isStencilIteration(funcOp)) {
+            // 对于迭代定义的func部分
+            auto newFuncOp = rewriter.create<sw::MainIterationFuncOp>(loc, funcOp.getName(), funcType);
+            // 删除自己创建的block
+            rewriter.eraseBlock(&newFuncOp.getBody().getBlocks().back());
+
+            // 复制域
+            rewriter.inlineRegionBefore(funcOp.getBody(), newFuncOp.getBody(),
+                                        newFuncOp.end());        
+            // 删除原有std终结符并在函数域中插入终结符
+            auto stdReturnOp = newFuncOp.getBody().front().getTerminator();
+            rewriter.eraseOp(stdReturnOp);
+            rewriter.setInsertionPointToEnd(&newFuncOp.getBody().front());
+            rewriter.create<sw::MainIterationReturnOp>(loc);
+
+
+            // 转换签名
+            rewriter.applySignatureConversion(&newFuncOp.getBody(), result);
+        }
         // 删除原操作
         rewriter.eraseOp(funcOp);
+
         return success();
     }
 };
@@ -691,6 +713,44 @@ public:
     }
 };
 
+class IterationOpLowering : public StencilOpToSWPattern<IterationOp> {
+public:
+    using StencilOpToSWPattern<IterationOp>::StencilOpToSWPattern;
+
+    LogicalResult
+    matchAndRewrite(Operation *operation, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const override {
+        auto loc = operation->getLoc();
+        auto iterationOp = cast<stencil::IterationOp>(operation);
+        
+        auto bindParamNum = iterationOp.getBindParamNum();
+        auto iterNum = iterationOp.getIterNum();
+        auto funcName = iterationOp.getStencilFuncName();
+
+        SmallVector<Value, 8> operands1, operands2;
+        for (int i = 0; i < bindParamNum; i++) {
+            operands1.push_back(operands[i]);
+            operands2.push_back(operands[i+bindParamNum]);
+        }
+
+        // 创建for循环
+        auto lb = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(0), rewriter.getI64Type());
+        auto ub = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(iterNum), rewriter.getI64Type());
+        auto step = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(1), rewriter.getI64Type());
+        auto forOp = rewriter.create<sw::ForOp>(loc, lb, ub, step);
+        // 在嵌套循环中创建sw.launch_main_func
+        rewriter.setInsertionPointToStart(forOp.getBody());
+        rewriter.create<sw::LaunchMainFuncOp>(loc, rewriter.getSymbolRefAttr(funcName), operands1);
+        rewriter.create<sw::LaunchMainFuncOp>(loc, rewriter.getSymbolRefAttr(funcName), operands2);
+        // 插入forOp终结符号
+        rewriter.create<sw::YieldOp>(loc);
+
+        // 删除iteration操作
+        rewriter.eraseOp(operation);
+        return success();
+    }
+};
+
 //============================================================================//
 // 转换目标
 //============================================================================//
@@ -701,7 +761,7 @@ public:
 
     bool isDynamicallyLegal(Operation *op) const override {
         if (auto funcOp = dyn_cast<FuncOp>(op)) {
-            return !StencilDialect::isStencilProgram(funcOp);
+            return !StencilDialect::isStencilProgram(funcOp) && !StencilDialect::isStencilIteration(funcOp);
         }
     }
 };
@@ -768,7 +828,7 @@ void populateStencilToSWConversionPatterns(
     patterns.insert<FuncOpLowering, ApplyOpLowering, AccessOpLowering,
                     LoadOpLowering, StoreOpLowering, ReturnOpLowering,
                     CopyOpLowering, ConstantOpLowering, AddFOpLowering,
-                    SubFOpLowering, MulFOpLowering, DivFOpLowering>(typeConverter, valueToLB, valueToOperand);
+                    SubFOpLowering, MulFOpLowering, DivFOpLowering, IterationOpLowering>(typeConverter, valueToLB, valueToOperand);
 }
 
 //============================================================================//

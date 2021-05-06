@@ -30,7 +30,6 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/None.h>
 #include <llvm/ADT/STLExtras.h>
-#include <llvm/ADT/STLExtras.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
 #include <algorithm>
@@ -457,7 +456,7 @@ static ParseResult parseMainFuncOp(OpAsmParser &parser, OperationState &state)
     return parser.parseRegion(*body, entryArgs, argTypes);
 }
 
-// 解析函数
+// 打印函数
 static void print(sw::MainFuncOp mainFuncOp, OpAsmPrinter &printer)
 {
     printer << "$mainModuleBegin\n";
@@ -497,8 +496,6 @@ static void print(sw::MainFuncOp mainFuncOp, OpAsmPrinter &printer)
     // 输出函数域
     printer.printRegion(mainFuncOp.region(), /*printEntryBlockArgs=*/false,
                         /*printBlockTerminators=*/false);
-
-    printer << "\n$mainModuleEnd\n";
 }
 
 //============================================================================//
@@ -513,6 +510,89 @@ static ParseResult parseMainReturnOp(OpAsmParser &parser, OperationState &state)
 
 // 输出函数
 static void print(sw::MainReturnOp returnOp, OpAsmPrinter &printer)
+{
+    // do nothing
+}
+
+//============================================================================//
+// MainIterationFuncOp 操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseMainIterationFuncOp(OpAsmParser &parser, OperationState &state)
+{
+    // 解析函数名称
+    StringAttr nameAttr;
+    if (parser.parseSymbolName(nameAttr, SymbolTable::getSymbolAttrName(), state.attributes))
+        return failure();
+    
+    // 解析func函数
+    SmallVector<OpAsmParser::OperandType, 8> entryArgs;
+    SmallVector<Type, 8> argTypes;
+    SmallVector<Type, 8> resultTypes;
+    SmallVector<NamedAttrList, 1> argAttrs;
+    SmallVector<NamedAttrList, 1> resultAttrs;
+
+    bool isVariadic;
+    auto signatureLocation = parser.getCurrentLocation();
+    if (failed(impl::parseFunctionSignature(parser, /*allowVariadic=*/false,
+            entryArgs, argTypes, argAttrs, isVariadic, resultTypes, resultAttrs)))
+        return failure();
+    if (entryArgs.empty() && !argTypes.empty())
+        return parser.emitError(signatureLocation) 
+            << "sw.main_iteration_func requires named arguments";
+    
+    Builder &builder = parser.getBuilder();
+    auto type = builder.getFunctionType(argTypes, resultTypes);
+    state.addAttribute(FuncOp::getTypeAttrName(), TypeAttr::get(type));
+
+    // 解析域
+    auto *body = state.addRegion();
+    return parser.parseRegion(*body, entryArgs, argTypes);
+}
+
+// 打印函数
+static void print(sw::MainIterationFuncOp mainIterationFuncOp, OpAsmPrinter &printer)
+{
+    // 输出函数
+    printer << "void " << mainIterationFuncOp.getName() << "(";
+    // 输出参数列表
+    ArrayRef<Type> argTypes = mainIterationFuncOp.getType().getInputs();
+    Region &body = mainIterationFuncOp.getOperation()->getRegion(0);
+    for (int iter = 0; iter < argTypes.size(); iter++) {
+        auto elemType = argTypes[iter].cast<mlir::sw::GridType>().getElementType();
+        if (elemType.cast<mlir::FloatType>().getWidth() == 64)
+            printer << "double ";
+        else
+            printer << "float ";
+        printer.printOperand(body.getArgument(iter));
+        auto shape = argTypes[iter].cast<mlir::sw::GridType>().getShape();
+        for (int iter_j = 0; iter_j < shape.size(); iter_j++)
+            printer << "[" << shape[iter_j] << "]";
+        
+        if (iter+1 != argTypes.size())
+            printer << ", ";
+    }
+    printer << ")";
+    
+    // 输出函数域
+    printer.printRegion(mainIterationFuncOp.region(), /*printEntryBlockArgs=*/false,
+                        /*printBlockTerminators=*/false);
+
+    printer << "\n$mainModuleEnd\n";
+}
+
+//============================================================================//
+// MainIterationReturnOp 操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseMainIterationReturnOp(OpAsmParser &parser, OperationState &state)
+{
+    // do nothing
+    return success();
+}
+
+// 输出函数
+static void print(sw::MainIterationReturnOp mainIterationReturnOp, OpAsmPrinter &printer)
 {
     // do nothing
 }
@@ -567,6 +647,62 @@ static void print(sw::LaunchFuncOp launchFuncOp, OpAsmPrinter &printer)
     printer <<", &" << launchFuncOp.getKernelName() << "_param";
     printer << ");\n";
     printer << "athread_join();\n";
+}
+
+//============================================================================//
+// launch_main_func 操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseLaunchMainFuncOp(OpAsmParser &parser, OperationState &state)
+{
+    // 解析函数名称
+    FlatSymbolRefAttr nameAttr;
+    if (parser.parseAttribute(nameAttr, sw::LaunchMainFuncOp::getMainFuncAttrName(), state.attributes))
+        return failure();
+
+    // 解析参数列表
+    SmallVector<OpAsmParser::OperandType, 8> operands;
+    SmallVector<Type, 8> operandTypes;
+    if (failed(parser.parseLParen())) // 解析左括号
+        return failure();
+
+    do {
+        OpAsmParser::OperandType currentOperand;
+        Type currentType;
+
+        if (parser.parseOperand(currentOperand) ||
+            parser.parseColonType(currentType))
+            return failure();
+
+        operands.push_back(currentOperand);
+        operandTypes.push_back(currentType);
+    } while(succeeded(parser.parseOptionalComma())); // 解析逗号
+
+    if (failed(parser.parseRParen())) // 解析右括号
+        return failure();
+
+    // 解析参数类型
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
+        return failure();
+
+    return success();
+}
+
+// 打印函数
+static void print(sw::LaunchMainFuncOp launchMainFuncOp, OpAsmPrinter &printer)
+{
+    printer << launchMainFuncOp.getMainFuncName() << "(";
+
+    // 输出参数
+    auto operands = launchMainFuncOp.operands();
+    for (int iter = 0; iter < operands.size(); iter++) {
+        printer << operands[iter];
+        if (iter+1 != operands.size())
+            printer << ", ";
+    }
+
+    printer << ");";
 }
 
 //============================================================================//

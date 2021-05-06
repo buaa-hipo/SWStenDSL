@@ -67,14 +67,40 @@
     sw.main_return
     ```
 
+-   main_iteration_func
+
+    该操作为主核函数, 其中包含多次迭代调用main_func
+
+    ```
+    sw.main_iteration_func @test(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
+    	...
+    }
+    ```
+
+-   main_iteration_return
+
+    main_iteration_func函数终结符
+
+    ```
+    sw.main_iteration_return
+    ```
+
 -   launch_func
 
     主核函数调用从核函数func
 
     ```
-    sw.launch_func @kernels::@kernel_1(%arg0: f32, %arg1 : sw.memref<4xf32>)
+    sw.launch_func @kernel_1(%arg0: f32, %arg1 : !sw.memref<4xf32>)
     ```
 
+-   launch_main_func
+
+    该操作负责调用main_func
+
+    ```
+    sw.launch_main_func @test(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>)
+    ```
+    
 -   launch
 
     未outline的从核函数，为IR转化提供便利

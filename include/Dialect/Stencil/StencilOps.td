@@ -432,4 +432,49 @@ def Stecnil_CopyOp : Stencil_Op<"copy", [
         static StringRef getUBAttrName() { return "ub"; }
     }];
 }
+
+//============================================================================//
+// iteration 操作, 用以实现多次计算迭代以及相关参数绑定
+//============================================================================//
+def Stencil_IterationOp : Stencil_Op<"iteration"> {
+    let summary = "iteration operation, represents iterative process";
+    let description = [{
+        This operation represents iterative process, and binds the parameter.
+    }];
+
+    // 传入参数
+    let arguments = (ins FlatSymbolRefAttr:$stencilFuncName, Variadic<Stencil_Field>:$operands, I64Attr:$bindParamNum, I64Attr:$iterNum);
+    
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, SymbolRefAttr stencilFunc, "
+                    "ValueRange bind_params, int64_t iterNum, int64_t bind_param_num", [{
+            state.addOperands(bind_params);
+            state.addAttribute(getStencilFuncAttrName(), stencilFunc);
+            state.addAttribute(getBindParamNumAttrName(), builder.getI64IntegerAttr(bind_param_num));
+            state.addAttribute(getIterNumAttrName(), builder.getI64IntegerAttr(iterNum));
+        }]>
+    ];
+
+    // 正确性检查, 无需检查, 直接返回true
+    let verifier = [{
+        return success();
+    }];
+
+    // 辅助函数
+    let extraClassDeclaration = [{
+        static StringRef getStencilFuncAttrName() { return "stencilFuncName"; }
+        static StringRef getBindParamNumAttrName() { return "bindParamNum"; }
+        static StringRef getIterNumAttrName() { return "iterNum"; }
+
+        // 获取调用函数名称
+        StringRef getStencilFuncName() { return stencilFuncName(); }
+        unsigned int getBindParamNum() { 
+            return getAttrOfType<IntegerAttr>(getBindParamNumAttrName()).getInt(); 
+        }
+        unsigned int  getIterNum() { 
+            return getAttrOfType<IntegerAttr>(getIterNumAttrName()).getInt(); 
+        }
+    }];
+}
 #endif // end of _DIALECT_STENCIL_STENCIL_OPS_TD_

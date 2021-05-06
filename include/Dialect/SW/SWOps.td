@@ -187,6 +187,56 @@ def SW_MainReturnOp : SW_Op<"main_return", [
 }
 
 //============================================================================//
+// main_iteration_func操作
+//============================================================================//
+def SW_MainIterationFuncOp : SW_Op<"main_iteration_func", [
+        AutomaticAllocationScope,
+        FunctionLike,
+        Symbol
+    ]> {
+    let summary = "Iteration Func executable on mpe";
+    let description = [{
+        Defines a iteration that can be executed on MPE.
+    }];
+
+    // 函数域
+    let regions = (region SizedRegion<1>:$region);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, StringRef name, "
+                    "FunctionType type", [{
+            state.addAttribute(SymbolTable::getSymbolAttrName(),
+                                builder.getStringAttr(name));
+            state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
+            Region *body = state.addRegion();
+            Block *entryBlock = new Block;
+            entryBlock->addArguments(type.getInputs());
+            body->getBlocks().push_back(entryBlock);
+        }]>
+    ];
+    // 辅助函数
+    let extraClassDeclaration = [{
+        unsigned int getNumFuncArguments() { return getType().getNumInputs(); }
+        unsigned int getNumFuncResults() { return getType().getNumResults(); }
+    }];
+}
+
+//============================================================================//
+// main_iteration_return
+//============================================================================//
+def SW_MainIterationReturnOp : SW_Op<"main_iteration_return", [
+        HasParent<"MainIterationFuncOp">,
+        Terminator
+    ]> {
+    let summary = "Terminator for MainIterationFuncOp";
+    let description = [{
+        This op terminates the only block inside the only region 
+        of a `sw.main_iteration_return`.
+    }];
+}
+
+//============================================================================//
 // launch_func操作，MPE通过该函数调用相应的kernel函数
 //============================================================================//
 def SW_LaunchFuncOp : SW_Op<"launch_func"> {
@@ -218,6 +268,40 @@ def SW_LaunchFuncOp : SW_Op<"launch_func"> {
 
         // 获取spe函数Attribute的名称
         static StringRef getKernelAttrName() { return "kernel"; }
+    }];
+}
+
+//============================================================================//
+// launch_main_func操作, 负责调用main_func
+//============================================================================//
+def SW_LaunchMainFuncOp : SW_Op<"launch_main_func"> {
+    let summary = "Launches a main function.";
+    let description = [{
+        host launches a main function.
+    }];
+
+    // 传入参数
+    let arguments = (ins FlatSymbolRefAttr: $mainFuncName,
+                        Variadic<SW_MemRef>: $operands);
+
+    // 构造函数
+    let skipDefaultBuilders = 1;
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "SymbolRefAttr mainFuncName, "
+                    "ValueRange mainFuncOperands", [{
+            state.addOperands(mainFuncOperands);
+            state.addAttribute(getMainFuncAttrName(), mainFuncName);
+        }]>
+    ];
+
+    // 辅助函数
+    let extraClassDeclaration = [{
+        // 获取mainFunc函数的Attribute名称
+        static StringRef getMainFuncAttrName() { return "mainFuncName"; }
+
+        // 获取mainFunc名称
+        StringRef getMainFuncName() { return mainFuncName(); }
     }];
 }
 

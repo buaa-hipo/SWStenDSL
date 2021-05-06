@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <functional>
 #include <tuple>
+#include <iostream>
 
 #include "Dialect/Stencil/StencilOps.h"
 #include "Dialect/Stencil/StencilDialect.h"
@@ -169,7 +170,112 @@ static void print(stencil::ApplyOp applyOp, OpAsmPrinter &printer) {
         printer << ")";
     }
 }
+//============================================================================//
+// iteration操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseIterationOp(OpAsmParser &parser, OperationState &state)
+{
+    FlatSymbolRefAttr stencilFuncNameAttr;
 
+    // 解析stencilFunc名称
+    if (parser.parseAttribute(stencilFuncNameAttr, stencil::IterationOp::getStencilFuncAttrName(), state.attributes))
+        return failure();
+    
+    // 解析绑定关系, 左绑定与右绑定数目相等
+    SmallVector<OpAsmParser::OperandType, 8> operands;
+    SmallVector<Type, 8> operandTypes;
+    OpAsmParser::OperandType currentOperand;
+    Type currentType;
+    int bind_param_size = 0;
+    
+    if (failed(parser.parseLParen())) // 解析最外层左括号
+        return failure();
+
+    // 解析左侧绑定
+    if (failed(parser.parseLParen())) // 解析左绑定左括号
+        return failure();
+    do {
+        if (parser.parseOperand(currentOperand) || 
+            parser.parseColonType(currentType))
+            return failure();
+        operands.push_back(currentOperand);
+        operandTypes.push_back(currentType);
+    } while(succeeded(parser.parseOptionalComma())); // 解析逗号
+    if (failed(parser.parseRParen()) || failed(parser.parseComma())) // 解析左绑定右括号及逗号
+        return failure();
+    bind_param_size = operands.size();
+
+    // 解析右侧绑定
+    if (failed(parser.parseLParen())) // 解析右绑定左括号
+        return failure();
+    do {
+        if (parser.parseOperand(currentOperand) || 
+            parser.parseColonType(currentType))
+            return failure();
+        operands.push_back(currentOperand);
+        operandTypes.push_back(currentType);
+    } while(succeeded(parser.parseOptionalComma())); // 解析逗号
+    if (failed(parser.parseRParen()) || failed(parser.parseComma())) // 解析右绑定右括号及逗号
+        return failure();
+
+    if (bind_param_size*2 != operands.size())
+        return failure();
+
+    // 解析输入
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
+        return failure();
+    
+    // 保存绑定参数个数作为属性
+    Builder &builder = parser.getBuilder();
+    state.addAttribute(stencil::IterationOp::getBindParamNumAttrName(), 
+            builder.getI64IntegerAttr(bind_param_size));
+
+    // 解析迭代次数
+    Attribute valueAttr;
+    if (failed(parser.parseAttribute(valueAttr, stencil::IterationOp::getIterNumAttrName(), state.attributes)))
+        return failure();
+    
+    if (failed(parser.parseRParen())) // 解析最外层右括号
+        return failure();
+
+    return success();
+}
+
+// 打印函数
+static void print(stencil::IterationOp iterationOp, OpAsmPrinter &printer)
+{
+    printer << stencil::IterationOp::getOperationName() << ' ';
+
+    // 输出被调用函数名称
+    printer << iterationOp.getStencilFuncName() << ' ';
+    SmallVector<Value, 10> operands = iterationOp.getOperands();
+    auto bindParamAttr = iterationOp.getAttr(stencil::IterationOp::getBindParamNumAttrName()).cast<IntegerAttr>();
+    int bind_param_num = bindParamAttr.getValue().getSExtValue();
+    
+    // 输出左绑定参数
+    printer << "((";
+    llvm::interleaveComma(llvm::seq<int>(0, bind_param_num), printer, [&](int i) {
+        printer << operands[i] << " : " << operands[i].getType();
+    });
+    printer << "), ";
+
+    // 输出右绑定参数
+    printer << "(";
+    llvm::interleaveComma(llvm::seq<int>(bind_param_num, operands.size()), printer,
+        [&](int i) {
+        printer << operands[i] << " : " << operands[i].getType();
+    });
+    printer << "), ";
+
+    // 输出迭代次数
+    printer << iterationOp.iterNum() << ")";
+}
+
+//============================================================================//
+// store操作相关函数
+//============================================================================//
 // 获取使用了本Op返回值的Op中与返回值绑定的参数
 OpOperand *stencil::StoreOp::getReturnOpOperand() {
     auto current = res();

@@ -23,13 +23,11 @@
      Example：
 
      ```
-                 %0 = stencil.apply(%arg0 = %in : !stencil.field<6x6xf64>, %arg1 = %parameter : !stencil.field<4xf64>)  -> !stencil.field<6x6xf64> {
-                 	... ...
-                 } in ([0, 0] : [4, 4]) tile([2,2]) cacheAt(0)
-     
-                 
+     %0 = stencil.apply(%arg0 = %in : !stencil.field<6x6xf64>, %arg1 = %parameter : !stencil.field<4xf64>)  -> !stencil.field<6x6xf64> {
+     	... ...
+     } in ([0, 0] : [4, 4]) tile([2,2]) cacheAt(0)            
      ```
-
+     
 -   access
 
     位于apply操作的计算域中，stencil计算中访问相对于当前点偏移位置的点，返回对应点的值
@@ -80,9 +78,15 @@
     stencil.copy %0 to %out ([0, 0] : [4, 4]) : !stencil.field<6x6xf64> to !stencil.field<6x6xf64>
     ```
 
+
+-   iteration
+
+    指定函数迭代的次数以及多次的迭代的传参
+
+    Example:
+
+    ```
+    stencil.iteration @test((%arg0: f32, %arg1 : sw.memref<4xf32>), (%arg1 : sw.memref<4xf32>, %arg0: f32), 5)
+    ```
+
     
-
-
-
-
-

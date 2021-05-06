@@ -35,12 +35,17 @@ public:
 
     // 返回stencil方言中使用的IR对应的文本名称
     static StringRef getDialectNamespace() {return "stencil";}
-    static StringRef getStencilProgarmAttrName() {return "stencil.program";}
+    static StringRef getStencilProgarmAttrName() { return "stencil.program"; }
+    static StringRef getStencilIterationAttrName() { return "stencil.iteration"; }
     static StringRef getFieldTypeName() {return "field";}
     static StringRef getResultTypeName() {return "result";}
 
     static bool isStencilProgram(FuncOp funcOp) {
         return !!funcOp.getAttr(getStencilProgarmAttrName());
+    }
+
+    static bool isStencilIteration(FuncOp funcOp) {
+        return !!funcOp.getAttr(getStencilIterationAttrName());
     }
 
     // 解析本方言中的类型

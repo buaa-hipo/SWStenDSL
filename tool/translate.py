@@ -96,4 +96,3 @@ with open(sys.argv[1], 'r', encoding='utf-8') as f:
             output_file.write(output_string)
     
 f.close()
-        

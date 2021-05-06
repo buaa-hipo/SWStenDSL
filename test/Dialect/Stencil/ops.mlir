@@ -35,4 +35,13 @@ module {
 
             return
         }
+    
+    func @for_test(%in: !stencil.field<6x6xf64>, %out: !stencil.field<6x6xf64>, %parameter: !stencil.field<4xf64>) attributes { stencil.iteration }
+    {
+        stencil.iteration @test((%in: !stencil.field<6x6xf64>, %out: !stencil.field<6x6xf64>, 
+                %parameter: !stencil.field<4xf64>), (%out: !stencil.field<6x6xf64>, %in: !stencil.field<6x6xf64>, 
+                %parameter: !stencil.field<4xf64>), 5)
+
+        return
+    }
 }

@@ -63,4 +63,9 @@ module {
         }
         sw.main_return
     }
+
+    sw.main_iteration_func @main_iteration(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
+        sw.launch_main_func @main(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>)
+        sw.main_iteration_return
+    }
 }
