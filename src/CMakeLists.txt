@@ -9,7 +9,8 @@ set(LIBS
 
     Stencil
     SW
-   StencilToSW
+    StencilToSW
+    AST
 )
 
 add_llvm_executable(stenCC stenCC.cpp)

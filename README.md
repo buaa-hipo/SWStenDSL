@@ -8,7 +8,9 @@ SWStenDSL depends on a build of llvm  including MLIR. So you need to build and i
 
 cmake version is 3.19.7.
 
-ninja version is 1.10.2-1.
+ninja version is 1.10.2.
+
+gcc version is 10.2.0.
 
 ### Build LLVM project
 
