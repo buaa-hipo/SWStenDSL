@@ -58,7 +58,9 @@ public:
 
 private:
     Lexer &lexer;   // 词法解析器
-    ElemType domainType;
+    ElemType domainType; // 问题域计算类型, 单精度or双精度
+    // 记录数组的访问类型, 根据kernel中具体的使用情况来记录, 从而在stencilAST中设置相关数组的访问类型
+    std::map<std::string, swsten::ArrayType> arrayNameAndAccessPatternMapping;
 
     // 解析stencil定义
     std::unique_ptr<StencilAST> parseStencil() {
@@ -221,6 +223,10 @@ private:
             return parseError<StencilAST>("}", "in stencil define body");
         lexer.consume(Token('}'));
 
+        // 遍历整个参数列表, 根据解析得到的访问模式, 设置参数列表中的相应数组的访问模式
+        for (int argIter = 0; argIter < args.size(); argIter++) {
+            args[argIter]->setArrayType(arrayNameAndAccessPatternMapping[args[argIter]->getName().str()]);
+        }
         return std::make_unique<StencilAST>(loc, std::move(kernelList), stencilName, std::move(args), iteration, mpiTile, operation);
     }
 
@@ -238,8 +244,9 @@ private:
         lexer.consume(tok_identifier);
 
         // 解析定义体
-        std::vector<int> tile;
+        std::vector<int64_t> tile;
         int swCacheAt = -1;
+        std::vector<std::pair<int64_t, int64_t>> domainRange;
         std::unique_ptr<ExprAST> expr;
         // 解析左大括号
         if (lexer.getCurToken() != '{')
@@ -287,6 +294,47 @@ private:
                 if (lexer.getCurToken() != ')')
                     return parseError<KernelAST>(")", "in kernel define body");
                 lexer.consume(Token(')'));
+            } else if (lexer.getCurToken() == tok_domain) {
+                lexer.consume(tok_domain);
+                // 解析左括号
+                if (lexer.getCurToken() != '(')
+                    return parseError<KernelAST>("(", "in stencil define body");
+                lexer.consume(Token('('));
+                // 解析domain信息
+                do {
+                    if (lexer.getCurToken() != '[')
+                        return parseError<KernelAST>("[", "in stencil define");
+                    lexer.consume(Token('['));
+
+                    // 解析某维度的上下界
+                    int64_t lb, ub;
+                    // 下界
+                    if (lexer.getCurToken() != tok_number || lexer.getValueType() != type_Integer)
+                        return parseError<KernelAST>("Integer", "in stencil define");
+                    lb = (int64_t)lexer.getValue();
+                    lexer.consume(tok_number);
+                    // 解析数字之间的逗号
+                    if (lexer.getCurToken() != ',')
+                        return parseError<KernelAST>(",", "in stencil define");
+                    lexer.consume(Token(','));
+
+                    // 上界
+                    if (lexer.getCurToken() != tok_number || lexer.getValueType() != type_Integer)
+                        return parseError<KernelAST>("Integer", "in stencil define");
+                    ub = (int64_t)lexer.getValue();
+                    lexer.consume(tok_number);
+
+                    std::pair<int64_t, int64_t> lbAndub(lb, ub);
+                    domainRange.push_back(lbAndub);
+
+                    if (lexer.getCurToken() != ']')
+                        return parseError<KernelAST>("]", "in stencil define");
+                    lexer.consume(Token(']'));
+                } while (lexer.getCurToken() == '['); // 如果还有'['则证明解析还未结束
+                // 解析右括号
+                if (lexer.getCurToken() != ')')
+                    return parseError<KernelAST>(")", "in stencil define body");
+                lexer.consume(Token(')'));
             } else if (lexer.getCurToken() == tok_Expr) {
                 lexer.consume(tok_Expr);
                 // 解析左大括号
@@ -300,7 +348,7 @@ private:
                     return parseError<KernelAST>("}", "in kernel define body");
                 lexer.consume(Token('}'));
             } else {
-                return parseError<KernelAST>("tile, swCacheAt, expr", "in kernel define body");
+                return parseError<KernelAST>("tile, swCacheAt, domain, expr", "in kernel define body");
             }
         }
 
@@ -310,7 +358,7 @@ private:
         lexer.consume(Token('}'));
 
         // 构造并返回
-        return std::make_unique<KernelAST>(loc, std::move(expr), kernelName, tile, swCacheAt);
+        return std::make_unique<KernelAST>(loc, std::move(expr), kernelName, tile, swCacheAt, domainRange);
     }
 
     // 解析表达式
@@ -413,7 +461,7 @@ private:
         lexer.consume(tok_identifier);
 
         // 解析指定的位置
-        std::vector<int> offset;
+        std::vector<int64_t> offset;
         ArrayType arrayType = Type_ParamArray;  // 默认是参数数组
         int iter = 0;
         if (lexer.getCurToken() != '[')
@@ -485,6 +533,9 @@ private:
             lexer.consume(Token(']'));
             iter ++;
         }
+
+        // 记录该数组类型的访问模式
+        arrayNameAndAccessPatternMapping[name]=arrayType;
 
         return std::make_unique<ArrayExprAST>(loc, name, offset, domainType, arrayType);
     }

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import os
 
 if len(sys.argv) != 2 :
     print('Usage: ', sys.argv[0], 'FileName')
@@ -22,6 +23,11 @@ discrete_var = 0    # 这个变量用于将主核, 从核使用的变量名称�
                     # 使变量的形式为value$(discrete_var)_[0-9]+,
                     # 从而避免从核__thread_local变量重定义问题
 
+# 如果MPE源文件存在则删除该文件, 因为该文将将以追加的形式打开
+mpe_src_path = "kernel"+sys.argv[1]+"_master.c"
+if os.path.exists(mpe_src_path) is True:
+    os.remove(mpe_src_path)
+
 #输出文件
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
     for line in f.readlines():
@@ -39,7 +45,7 @@ with open(sys.argv[1], 'r', encoding='utf-8') as f:
                 output_file.close()
             elif (line.find("mainModuleBegin") != -1): # mpe_module开始命令
                 is_in_mpe_module = True
-                output_file = open("kernel"+sys.argv[1]+"_master.c", 'w')
+                output_file = open("kernel"+sys.argv[1]+"_master.c", 'a+')
             elif (line.find("mainModuleEnd") != -1): # mpe_module结束命令
                 is_in_mpe_module = False
                 discrete_var = discrete_var + 1

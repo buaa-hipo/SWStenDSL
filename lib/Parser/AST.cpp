@@ -103,9 +103,14 @@ void ASTDumper::dump(ExprAST *expr) {
 // 输出变量声明节点
 void ASTDumper::dump(VarDeclExprAST *varDecl) {
     INDENT();
-    llvm::errs() << "VarDecl" << varDecl->getName();
+    llvm::errs() << "VarDecl " << varDecl->getName();
     dump(varDecl->getType());
-    llvm::errs() << " " << loc(varDecl) << "\n";
+    std::string arrayType;
+    if (varDecl->getArrayType() == Type_StructArray)
+        arrayType = "Struct";
+    else 
+        arrayType = "Param";
+    llvm::errs() << "(ArrayType: " << arrayType << ") " << loc(varDecl) << "\n";
 }
 
 // 输出数值节点
@@ -122,7 +127,7 @@ void ASTDumper::dump(ArrayExprAST *array) {
     INDENT();
     llvm::errs() << array->getName();
 
-    std::vector<int> index = array->getIndex();
+    std::vector<int64_t> index = array->getIndex();
     for (int i = 0; i < index.size(); i++) {
         llvm::errs() << "[" << index[i] << "]";
     }
@@ -156,7 +161,7 @@ void ASTDumper::dump(KernelAST *kernel) {
     // 输出Tile
     indent();
     llvm::errs() << "-->Tile: [";
-    std::vector<int> tile;
+    std::vector<int64_t> tile;
     tile = kernel->getTile();
     for (int i=0; i < tile.size(); i++) {
         llvm::errs() << tile[i];
@@ -169,6 +174,14 @@ void ASTDumper::dump(KernelAST *kernel) {
     // 输出swCacheAt
     indent();
     llvm::errs() << "-->swCacheAt: " << kernel->getSWCacheAt() << "\n";
+
+    // 输出问题域范围
+    indent();
+    llvm::errs() << "-->domain: ";
+    std::vector<std::pair<int64_t, int64_t>> domainRange = kernel->getDomainRange();
+    for (auto iter = domainRange.begin(); iter != domainRange.end(); iter++)
+        llvm::errs() << "[" << iter->first << "," << iter->second << "]";
+    llvm::errs() << "\n";
 
     // 输出Expr
     indent();

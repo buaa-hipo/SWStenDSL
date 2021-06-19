@@ -45,7 +45,7 @@ enum ArrayType :int {
 // 所有表达式节点的基类
 class ExprAST {
 public:
-    enum ExprASTKind {
+    enum ExprASTKind : int{
         Expr_VarDecl,
         Expr_Num,
         Expr_Array,
@@ -89,6 +89,7 @@ class VarDeclExprAST : public ExprAST {
 private:
     std::string name;
     VarType type;
+    ArrayType arrayType;
 
 public:
     VarDeclExprAST(Location loc, llvm::StringRef name, VarType type) : ExprAST(Expr_VarDecl, loc) {
@@ -98,6 +99,10 @@ public:
 
     llvm::StringRef getName() { return name; }
     const VarType &getType() { return type; }
+    const ArrayType &getArrayType() { return arrayType; }
+    void setArrayType(ArrayType arrayType) {
+        this->arrayType = arrayType;
+    }
 
     // LLVM style RTTI
     static bool classof(const ExprAST *c) { return c->getKind() == Expr_VarDecl; }
@@ -107,12 +112,12 @@ public:
 class ArrayExprAST : public ExprAST {
 private:
     std::string name;
-    std::vector<int> index;
+    std::vector<int64_t> index;
     ElemType type;
     ArrayType arrayType;
 
 public:
-    ArrayExprAST(Location loc, llvm::StringRef name, std::vector<int> index, ElemType type, ArrayType arrayType)
+    ArrayExprAST(Location loc, llvm::StringRef name, std::vector<int64_t> index, ElemType type, ArrayType arrayType)
                     : ExprAST(Expr_Array, loc) {
         this->name = name.str();
         this->index = index;
@@ -121,7 +126,7 @@ public:
     }
 
     llvm::StringRef getName() { return name; }
-    std::vector<int> getIndex() { return index; }
+    std::vector<int64_t> getIndex() { return index; }
     ElemType getType() { return type; }
     ArrayType getArrayType() {return arrayType; }
 
@@ -155,26 +160,29 @@ public:
 class KernelAST {
 private:
     std::string name;               // kernel名称
-    std::vector<int> tile;          // kernel划分
+    std::vector<int64_t> tile;      // kernel划分
     int swCacheAt;                  // 并行位置, 申威专用
-
+    std::vector<std::pair<int64_t, int64_t>> domainRange; // 问题域计算范围
     std::unique_ptr<ExprAST> expr;
 
     Location location;
 
 public:
-    KernelAST(Location loc, std::unique_ptr<ExprAST> expr, std::string name, std::vector<int> tile, int swCacheAt) {
+    KernelAST(Location loc, std::unique_ptr<ExprAST> expr, std::string name, 
+        std::vector<int64_t> tile, int64_t swCacheAt, std::vector<std::pair<int64_t, int64_t>> domainRange) {
         this->location = loc;
         this->name = name;
         this->tile = tile;
         this->swCacheAt = swCacheAt;
+        this->domainRange = domainRange;
         this->expr = std::move(expr);
     }
 
     const Location &loc() { return location; }
     llvm::StringRef getName() { return name; }
-    std::vector<int> getTile() { return tile; }
-    int getSWCacheAt() { return swCacheAt; }
+    std::vector<int64_t> getTile() { return tile; }
+    int64_t getSWCacheAt() { return swCacheAt; }
+    std::vector<std::pair<int64_t, int64_t>> getDomainRange() { return domainRange; }
     ExprAST *getExpr() { return expr.get(); }
 };
 

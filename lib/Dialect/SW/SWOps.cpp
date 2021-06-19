@@ -496,6 +496,7 @@ static void print(sw::MainFuncOp mainFuncOp, OpAsmPrinter &printer)
     // 输出函数域
     printer.printRegion(mainFuncOp.region(), /*printEntryBlockArgs=*/false,
                         /*printBlockTerminators=*/false);
+    printer << "\n$mainModuleEnd\n";                    
 }
 
 //============================================================================//
@@ -553,6 +554,7 @@ static ParseResult parseMainIterationFuncOp(OpAsmParser &parser, OperationState 
 // 打印函数
 static void print(sw::MainIterationFuncOp mainIterationFuncOp, OpAsmPrinter &printer)
 {
+    printer << "$mainModuleBegin\n";
     // 输出函数
     printer << "void " << mainIterationFuncOp.getName() << "(";
     // 输出参数列表
