@@ -64,8 +64,10 @@ module {
         sw.main_return
     }
 
-    sw.main_iteration_func @main_iteration(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
+    sw.main_iteration_func @main_iteration(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>, %array: !sw.memref<1x2x3xf64>) {
         sw.launch_main_func @main(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>)
+        %0 = sw.getMpiRank
+        sw.mpiExchangeHalo %array, %0 : mpiTile([1,2,3]) mpiHalo([1,2,3]:[4,5,6]) : !sw.memref<1x2x3xf64>
         sw.main_iteration_return
     }
 }

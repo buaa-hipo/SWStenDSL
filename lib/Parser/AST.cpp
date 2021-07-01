@@ -209,7 +209,7 @@ void ASTDumper::dump(StencilAST *stencil) {
 
     // 输出mpi划分
     indent();
-    std::vector<int> mpiTile = stencil->getMpiTile();
+    std::vector<int64_t> mpiTile = stencil->getMpiTile();
     llvm::errs() << "-->mpiTile: [";
     for (int i = 0; i < mpiTile.size(); i++) {
         llvm::errs() << mpiTile[i];

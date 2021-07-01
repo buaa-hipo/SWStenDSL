@@ -738,10 +738,26 @@ public:
         auto ub = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(iterNum), rewriter.getI64Type());
         auto step = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(1), rewriter.getI64Type());
         auto forOp = rewriter.create<sw::ForOp>(loc, lb, ub, step);
-        // 在嵌套循环中创建sw.launch_main_func
+        // 在嵌套循环中创建sw.launch_main_func, 如果启用了mpi还需要创建相关的函数
         rewriter.setInsertionPointToStart(forOp.getBody());
+        // 如果启用了mpi则获取当前进程在通信域中的id
+        Value mpiRank;
+        if (iterationOp.isEnableMPI()) 
+            mpiRank = rewriter.create<sw::GetMpiRankOp>(loc);
+        // 计算一次
         rewriter.create<sw::LaunchMainFuncOp>(loc, rewriter.getSymbolRefAttr(funcName), operands1);
+        // 如果启用了mpi, 则交换该次计算的结果, 该结果将作为下一次计算的输入
+        if (iterationOp.isEnableMPI()) {
+            rewriter.create<sw::MpiExchangeHaloOp>(loc, operands1[1], mpiRank,\
+                iterationOp.mpiTile().getValue(), iterationOp.mpiHaloL().getValue(), iterationOp.mpiHaloU().getValue());
+        }
+        // 计算一次
         rewriter.create<sw::LaunchMainFuncOp>(loc, rewriter.getSymbolRefAttr(funcName), operands2);
+        // 如果启用了mpi, 则交换该次计算的结果, 该结果将作为下一次计算的输入
+        if (iterationOp.isEnableMPI()) {
+            rewriter.create<sw::MpiExchangeHaloOp>(loc, operands2[1], mpiRank,\
+                iterationOp.mpiTile().getValue(), iterationOp.mpiHaloL().getValue(), iterationOp.mpiHaloU().getValue());
+        }
         // 插入forOp终结符号
         rewriter.create<sw::YieldOp>(loc);
 

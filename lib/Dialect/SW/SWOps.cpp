@@ -107,12 +107,12 @@ static ParseResult parseMathOp(OpAsmParser &parser, OperationState &state)
     return success();
 }
 
-static ParseResult parseMemcpyOpAttr(OpAsmParser &parser, 
+static ParseResult parseKeywordAttr(OpAsmParser &parser, 
                                     OperationState &state, StringRef keyword)
 {
     Attribute attr;
     // 解析关键字
-    if (failed(parser.parseOptionalKeyword(keyword))) 
+    if (failed(parser.parseKeyword(keyword))) 
         return failure();
     // 解析左括号
     if (failed(parser.parseLParen()))
@@ -162,10 +162,10 @@ static ParseResult parseMemcpyOp(OpAsmParser &parser, OperationState &state)
     // 解析attributes
     if (failed(parser.parseColon())) // 解析冒号
         return failure();
-    if (failed(parseMemcpyOpAttr(parser, state, "z_dim"))
-        || failed(parseMemcpyOpAttr(parser, state, "cnt"))
-        || failed(parseMemcpyOpAttr(parser, state, "stride"))
-        || failed(parseMemcpyOpAttr(parser, state, "bsize")))
+    if (failed(parseKeywordAttr(parser, state, "z_dim"))
+        || failed(parseKeywordAttr(parser, state, "cnt"))
+        || failed(parseKeywordAttr(parser, state, "stride"))
+        || failed(parseKeywordAttr(parser, state, "bsize")))
         return failure();
 
     // 解析参数类型
@@ -252,25 +252,8 @@ static void print(sw::ModuleOp moduleOp, OpAsmPrinter &printer)
     printer << "#include <stdlib.h>\n";
     printer << "#include <math.h>\n";
     printer << "#include <string.h>\n";
-    printer << "#include <stdint.h>\n\n";
-
-    // DMA_get
-    printer << "#define DMA_get(src, dst, z_dim_size, cnt, stride, bsize) { \\\n";
-    printer << "\tvolatile unsigned long get_reply = 0; \\\n";
-    printer << "\tint z_iter; \\\n";
-    printer << "\tfor (z_iter = 0; z_iter < z_dim_size; z_iter++) \\\n";
-    printer << "\t\tathread_get(PE_MODE, &src, &dst, cnt, &get_reply, 0, stride, bsize); \\\n";
-    printer << "\twhile(get_reply != z_dim_size); \\\n";
-    printer << "}\n";
-
-    // DMA_put
-    printer << "#define DMA_put(src, dst, z_dim_size, cnt, stride, bsize) { \\\n";
-    printer << "\tvolatile unsigned long put_reply = 0; \\\n";
-    printer << "\tint z_iter; \\\n";
-    printer << "\tfor (z_iter = 0; z_iter < z_dim_size; z_iter++) \\\n";
-    printer << "\t\tathread_put(PE_MODE, &src, &dst, cnt, &put_reply, stride, bsize); \\\n";
-    printer << "\twhile(put_reply != z_dim_size); \\\n";
-    printer << "}\n";
+    printer << "#include <stdint.h>\n";
+    printer << "#include \"utils/dma_lib.h\"\n\n";
     
     // 输出域
     printer << "\n$delete";
@@ -469,6 +452,9 @@ static void print(sw::MainFuncOp mainFuncOp, OpAsmPrinter &printer)
     printer << "#include <sys/time.h>\n";
     printer << "#include <string.h>\n";
     printer << "#include <stdint.h>\n";
+    printer << "#ifdef SWStenMPI\n";
+    printer << "#include \"utils/mpi_lib.h\"\n";
+    printer << "#endif\n\n";
 
     // mpe和spe共享内容的插入点
     printer << "$shareInsertPoint\n";
@@ -1499,6 +1485,132 @@ static void print(sw::DeAllocOp deAllocOp, OpAsmPrinter &printer)
     printer << "free(" << deAllocOp.input() << ");";
 }
 
+//============================================================================//
+// getMpiRank操作相关函数实现
+//============================================================================//
+// 解析函数
+static ParseResult parseGetMpiRankOp(OpAsmParser &parser, OperationState &state)
+{
+    // 此函数返回值一定是int类型
+    Builder &builder = parser.getBuilder();
+    Type type = builder.getI32Type();
+
+    // 将返回值的类型设置为int
+    return parser.addTypeToList(type, state.types);
+}
+
+// 输出函数
+static void print(sw::GetMpiRankOp getMpiRankOp, OpAsmPrinter &printer)
+{
+    printer << "mpiGetMyRank();$moveToHead<-int";
+}
+
+//============================================================================//
+// mpiExchangeHalo操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseMpiExchangeHaloOp(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 2> operands;
+    SmallVector<Type, 2> operandTypes;
+    OpAsmParser::OperandType currentOperand;
+    Type currentType;
+
+    // 解析待交换数据的数组
+    if (failed(parser.parseOperand(currentOperand)))
+        return failure();
+    operands.push_back(currentOperand);
+
+    // 解析当前进程rank
+    if (failed(parser.parseComma())
+        || failed(parser.parseOperand(currentOperand)))
+        return failure();
+    operands.push_back(currentOperand);
+
+    // 解析mpiTile
+    if (failed(parser.parseColon()) || failed(parseKeywordAttr(parser, state, "mpiTile")))
+        return failure();
+
+    // 解析mpiHalo, 此处分为mpiHaloL和mpiHaloU
+    Attribute mpiHaloLAttr, mpiHaloUAttr;
+    // 解析关键字及左括号
+    if (failed(parser.parseKeyword("mpiHalo"))
+        || failed(parser.parseLParen()))
+        return failure();
+    // 解析mpiHaloL
+    if (failed(parser.parseAttribute(mpiHaloLAttr, sw::MpiExchangeHaloOp::getMpiHaloLName(), state.attributes)))
+        return failure();
+    // 解析冒号
+    if (failed(parser.parseColon()))
+        return failure();
+    // 解析mpiHaloU
+    if (failed(parser.parseAttribute(mpiHaloUAttr, sw::MpiExchangeHaloOp::getMpiHaloUName(), state.attributes)))
+        return failure();
+    // 解析右括号
+    if (failed(parser.parseRParen()))
+        return failure();
+    
+    // 解析待交换数组的类型
+    if (failed(parser.parseColon()) || failed(parser.parseType(currentType)))
+        return failure();
+    operandTypes.push_back(currentType);
+
+    // 由于rank一定是int类型, 此处直接指定
+    Builder &builder = parser.getBuilder();
+    currentType = builder.getI32Type();
+    operandTypes.push_back(currentType);
+
+    // 执行参数解析
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
+        return failure();
+
+    return success();
+}
+
+// 输出函数
+static void print(sw::MpiExchangeHaloOp mpiExchangeHaloOp, OpAsmPrinter &printer)
+{
+    // 获取待交换数组的维度和数据类型
+    std::string arrayDimString, arrayElemTypeString;
+    auto arrayType = mpiExchangeHaloOp.dataArray().getType().cast<mlir::sw::GridType>();
+    auto arrayDim = arrayType.getRank();
+    auto arrayShape = arrayType.getShape();
+    auto arrayElemType = arrayType.getElementType().cast<mlir::FloatType>();
+    // 生成维度字符串
+    if (arrayDim == 2) {
+        arrayDimString = "2D";
+    } else if (arrayDim == 3) {
+        arrayDimString = "3D";
+    } else {
+        printer << "$error";
+    }
+    // 生成类型字符串
+    arrayElemTypeString = (arrayElemType.getWidth() == 64) ? "double" : "float";
+
+    // 构造输出
+    printer << "exchange_halo_" << arrayDimString << "_" << arrayElemTypeString << "(";
+    // 输出待交换数组名及其维度信息
+    printer << mpiExchangeHaloOp.dataArray() << ", ";
+    for (int iter = 0; iter < arrayShape.size(); iter ++)
+        printer << arrayShape[iter] << ", ";
+    // 输出mpiTile信息
+    auto mpiTileAttr = mpiExchangeHaloOp.mpiTile();
+    for (int iter = 0; iter < mpiTileAttr.size(); iter ++) {
+        printer << mpiTileAttr[iter].cast<mlir::IntegerAttr>().getInt();
+        printer << ", ";
+    }
+    // 输出mpiHalo信息, 分为mpiHaloL和mpiHaloU, 这两者的维度是相同的
+    auto mpiHaloLAttr = mpiExchangeHaloOp.mpiHaloL();
+    auto mpiHaloUAttr = mpiExchangeHaloOp.mpiHaloU();
+    for (int iter = 0; iter < mpiHaloLAttr.size(); iter ++) {
+        printer << mpiHaloLAttr[iter].cast<mlir::IntegerAttr>().getInt();
+        printer << ", ";
+        printer << mpiHaloUAttr[iter].cast<mlir::IntegerAttr>().getInt();
+        printer << ", ";
+    }
+    printer << mpiExchangeHaloOp.rank() << ");";
+}
 
 namespace mlir {
 namespace sw {

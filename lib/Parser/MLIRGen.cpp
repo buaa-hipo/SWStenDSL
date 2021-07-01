@@ -319,10 +319,34 @@ private:
             retFuncList.clear();
             return retFuncList;
         }
-
+        // 获取mpiTile
+        std::vector<int64_t> mpiTile = stencilAST.getMpiTile();
+        // 获取mpiHalo, 并将其分成mpiHaloL和mpiHaloU
+        // mpiHaloL中存储的是偏移量为负的数字部分
+        // mpiHaloU中存储的是偏移量为正的数字部分
+        std::vector<int64_t> mpiHaloL;
+        std::vector<int64_t> mpiHaloU;
+        std::vector<std::pair<int64_t, int64_t>> mpiHaloLAndU = stencilAST.getMpiHalo();
+        for (auto iter = mpiHaloLAndU.begin(); iter != mpiHaloLAndU.end(); iter++) {
+            mpiHaloL.push_back(iter->first);
+            mpiHaloU.push_back(iter->second);
+        }
+        // 参数转化, 如果对应的参数存在, 则生成相应的传参, 否则对应传参为空
+        llvm::Optional<llvm::ArrayRef<int64_t>> mpiTile_param = llvm::Optional<llvm::ArrayRef<int64_t>>();
+        llvm::Optional<llvm::ArrayRef<int64_t>> mpiHaloL_param = llvm::Optional<llvm::ArrayRef<int64_t>>();
+        llvm::Optional<llvm::ArrayRef<int64_t>> mpiHaloU_param = llvm::Optional<llvm::ArrayRef<int64_t>>();
+        if (mpiTile.size() != 0)
+            mpiTile_param = llvm::ArrayRef<int64_t>(mpiTile);
+        if (mpiHaloL.size() != 0 && mpiHaloU.size() != 0) {
+            mpiHaloL_param = llvm::ArrayRef<int64_t>(mpiHaloL);
+            mpiHaloU_param = llvm::ArrayRef<int64_t>(mpiHaloU);
+        }
         if (iterationNum != 1) {
             // 创建stencil.iteration操作
-            builder.create<stencil::IterationOp>(location, builder.getSymbolRefAttr(computeFuncOp.getName()), iterFuncOpArg, iterationNum/2, bindParamNum);
+            builder.create<stencil::IterationOp>(location, 
+                            builder.getSymbolRefAttr(computeFuncOp.getName()), 
+                            iterFuncOpArg, iterationNum/2, bindParamNum, 
+                            mpiTile_param, mpiHaloL_param, mpiHaloU_param);
             // 记录迭代函数
             retFuncList.push_back(iterationFuncOp);
         }

@@ -52,7 +52,8 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
             state.addAttribute(getLBAttrName(), builder.getI64ArrayAttr(lb));
             state.addAttribute(getUBAttrName(), builder.getI64ArrayAttr(ub));
             state.addAttribute(getTileAttrName(), builder.getI64ArrayAttr(tile));
-            state.addAttribute(getCacheAtAttrName(), builder.getI64IntegerAttr(cacheAt.getValue()));
+            if (cacheAt.hasValue())
+                state.addAttribute(getCacheAtAttrName(), builder.getI64IntegerAttr(cacheAt.getValue()));
             auto region = state.addRegion();
             region->push_back(new Block());
             for (auto operand : operands) {
@@ -443,22 +444,39 @@ def Stencil_IterationOp : Stencil_Op<"iteration"> {
     }];
 
     // 传入参数
-    let arguments = (ins FlatSymbolRefAttr:$stencilFuncName, Variadic<Stencil_Field>:$operands, I64Attr:$bindParamNum, I64Attr:$iterNum);
+    let arguments = (ins FlatSymbolRefAttr:$stencilFuncName,
+                    Variadic<Stencil_Field>:$operands,
+                    I64Attr:$bindParamNum, I64Attr:$iterNum, 
+                    OptionalAttr<I64ArrayAttr>:$mpiTile,
+                    OptionalAttr<I64ArrayAttr>:$mpiHaloL,
+                    OptionalAttr<I64ArrayAttr>:$mpiHaloU);
     
     // 构造函数
     let builders = [
         OpBuilder<"OpBuilder &builder, OperationState &state, SymbolRefAttr stencilFunc, "
-                    "ValueRange bind_params, int64_t iterNum, int64_t bind_param_num", [{
+                    "ValueRange bind_params, int64_t iterNum, int64_t bind_param_num, "
+                    "Optional<ArrayRef<int64_t>> mpiTile, "
+                    "Optional<ArrayRef<int64_t>> mpiHaloL, Optional<ArrayRef<int64_t>> mpiHaloU", [{
             state.addOperands(bind_params);
             state.addAttribute(getStencilFuncAttrName(), stencilFunc);
             state.addAttribute(getBindParamNumAttrName(), builder.getI64IntegerAttr(bind_param_num));
             state.addAttribute(getIterNumAttrName(), builder.getI64IntegerAttr(iterNum));
+            if (mpiTile.hasValue()) 
+                state.addAttribute(getMpiTileAttrName(), builder.getI64ArrayAttr(mpiTile.getValue()));
+            if (mpiHaloL.hasValue() && mpiHaloU.hasValue()) {
+                state.addAttribute(getMpiHaloLAttrName(), builder.getI64ArrayAttr(mpiHaloL.getValue()));
+                state.addAttribute(getMpiHaloUAttrName(), builder.getI64ArrayAttr(mpiHaloU.getValue()));
+            }
         }]>
     ];
 
-    // 正确性检查, 无需检查, 直接返回true
+    // 正确性检查
     let verifier = [{
-        return success();
+        // mpiTile和mpiHalo[LU]必须同时出现或者同时不出现
+        if (mpiTile().hasValue() && mpiHaloL().hasValue() && mpiHaloU().hasValue() ||
+            !mpiTile().hasValue() && !mpiHaloL().hasValue() && !mpiHaloU().hasValue())
+                return success();
+        return emitOpError("mpiTile and mpiHalo must present or not present at the same time");
     }];
 
     // 辅助函数
@@ -466,6 +484,9 @@ def Stencil_IterationOp : Stencil_Op<"iteration"> {
         static StringRef getStencilFuncAttrName() { return "stencilFuncName"; }
         static StringRef getBindParamNumAttrName() { return "bindParamNum"; }
         static StringRef getIterNumAttrName() { return "iterNum"; }
+        static StringRef getMpiTileAttrName() { return "mpiTile"; }
+        static StringRef getMpiHaloLAttrName() { return "mpiHaloL"; }
+        static StringRef getMpiHaloUAttrName() { return "mpiHaloU"; }
 
         // 获取调用函数名称
         StringRef getStencilFuncName() { return stencilFuncName(); }
@@ -474,6 +495,11 @@ def Stencil_IterationOp : Stencil_Op<"iteration"> {
         }
         unsigned int  getIterNum() { 
             return getAttrOfType<IntegerAttr>(getIterNumAttrName()).getInt(); 
+        }
+
+        // 是否启用mpi
+        bool isEnableMPI() {
+            return mpiTile().hasValue() && mpiHaloL().hasValue() && mpiHaloU().hasValue();
         }
     }];
 }

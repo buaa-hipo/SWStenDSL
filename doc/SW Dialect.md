@@ -2,265 +2,249 @@
 
 ## 1. 变量类型
 
--   MemRef类型
+- MemRef类型
 
-    该类型对应相应的输入和输出数组, 支持1D, 2D, 3D的单双精度浮点数
+  该类型对应相应的输入和输出数组, 支持1D, 2D, 3D的单双精度浮点数
+- Index类型(内部类型)
 
--   Index类型(内部类型)
-
-    多维64位整型数组, 用来表示坐标位置
+  多维64位整型数组, 用来表示坐标位置
 
 ## 2. 操作定义
 
--   module
+- module
 
-    包围生成为从核函数的代码，每个从核函数都有一个相对应的module
+  包围生成为从核函数的代码，每个从核函数都有一个相对应的module
 
-    ```
-    sw.module @symbol_name
-    {
-        ...
-    }
-    ```
-    
--   module_end
+  ```
+  sw.module @symbol_name
+  {
+      ...
+  }
+  ```
+- module_end
 
-    module的终结符
+  module的终结符
+
+  ```
+  sw.module_end
+  ```
+- func
 
-    ```
-    sw.module_end
-    ```
-    
--   func
+  outline之后从核函数， 位于某一个module中
 
-    outline之后从核函数， 位于某一个module中
+  ```
+  sw.func @foo(%arg0: index) 	cacheRead(%cacheRead:!sw.memref<3x3x3xf64>) cacheWrite(%cacheWrite:!sw.memref<3x3x3xf64>) {
+  	...
+  }
+  ```
+- return
 
-    ```
-    sw.func @foo(%arg0: index) 	cacheRead(%cacheRead:!sw.memref<3x3x3xf64>) cacheWrite(%cacheWrite:!sw.memref<3x3x3xf64>) {
-    	...
-    }
-    ```
+  func操作的终结符
 
--   return 
+  ```
+  sw.return
+  ```
+- main_func
 
-    func操作的终结符
+  主核函数
 
-    ```
-    sw.return
-    ```
+  ```
+  sw.main_func @main(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
+  	...
+  }
+  ```
+- main_return
 
--   main_func
+  主核函数终结符
 
-    主核函数
+  ```
+  sw.main_return
+  ```
+- main_iteration_func
 
-    ```
-    sw.main_func @main(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
-    	...
-    }
-    ```
+  该操作为主核函数, 其中包含多次迭代调用main_func
 
--   main_return
+  ```
+  sw.main_iteration_func @test(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
+  	...
+  }
+  ```
+- main_iteration_return
 
-    主核函数终结符
+  main_iteration_func函数终结符
 
-    ```
-    sw.main_return
-    ```
+  ```
+  sw.main_iteration_return
+  ```
+- launch_func
 
--   main_iteration_func
+  主核函数调用从核函数func
 
-    该操作为主核函数, 其中包含多次迭代调用main_func
+  ```
+  sw.launch_func @kernel_1(%arg0: f32, %arg1 : !sw.memref<4xf32>)
+  ```
+- launch_main_func
 
-    ```
-    sw.main_iteration_func @test(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>) {
-    	...
-    }
-    ```
+  该操作负责调用main_func
 
--   main_iteration_return
+  ```
+  sw.launch_main_func @test(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>)
+  ```
+- launch
 
-    main_iteration_func函数终结符
+  未outline的从核函数，为IR转化提供便利
 
-    ```
-    sw.main_iteration_return
-    ```
+  ```
+  sw.launch (%arg0=%0 : f32, %arg1=%1 : sw.memref<4xf32>) :
+  	cacheRead(%cacheRead:!sw.memref<3x3x3xf64>)
+  	cacheWrite(%cacheWrite:!sw.memref<3x3x3xf64>){
+  	...
+  }
+  ```
+- terminator
 
--   launch_func
+  launch操作终结符
 
-    主核函数调用从核函数func
+  ```
+  sw.terminator
+  ```
+- for
 
-    ```
-    sw.launch_func @kernel_1(%arg0: f32, %arg1 : !sw.memref<4xf32>)
-    ```
+  for循环
 
--   launch_main_func
+  ```
+  sw.for %i = %lb to %ub step %step : i64{
+  	...
+  }
+  ```
+- yield
 
-    该操作负责调用main_func
+  for操作终结符
 
-    ```
-    sw.launch_main_func @test(%in: !sw.memref<1x1x1xf64>, %out: !sw.memref<2x2x2xf64>)
-    ```
-    
--   launch
+  ```
+  sw.yield
+  ```
+- load
 
-    未outline的从核函数，为IR转化提供便利
+  从指定位置加载数据
 
-    ```
-    sw.launch (%arg0=%0 : f32, %arg1=%1 : sw.memref<4xf32>) :
-    	cacheRead(%cacheRead:!sw.memref<3x3x3xf64>)
-    	cacheWrite(%cacheWrite:!sw.memref<3x3x3xf64>){
-    	...
-    }
-    ```
+  ```
+  %0 = sw.load %1 [0, 1, 3] : (!sw.memref<3x3x3xf64>, i32) -> f64
+  ```
+- constant
 
--   terminator
+  定义常量
 
-    launch操作终结符
+  ```
+  $1 = sw.constant 1.000000e+00 : f64
+  ```
+- getID
 
-    ```
-    sw.terminator
-    ```
-    
--   for
+  获取当前从核号
 
-    for循环
+  ```
+  $1 = sw.getID : I64
+  ```
+- addf
 
-    ```
-    sw.for %i = %lb to %ub step %step : i64{
-    	...
-    }
-    ```
+  加法
 
--   yield
+  ```
+  %2 = sw.addf %0, %1 : f64
+  ```
+- subf
 
-    for操作终结符
+  减法
 
-    ```
-    sw.yield
-    ```
+  ```
+  %2 = sw.subf %0, %1 : f64
+  ```
+- mulf
 
--   load
+  乘法
 
-    从指定位置加载数据
+  ```
+  %2 = sw.mulf %0, %1 : f64
+  ```
+- divf
 
-    ```
-    %0 = sw.load %1 [0, 1, 3] : (!sw.memref<3x3x3xf64>, i32) -> f64
-    ```
+  除法
 
--   constant
+  ```
+  %2 = sw.divf %0, %1 : f64
+  ```
+- store
 
-    定义常量
+  将结果写回到指定位置
 
-    ```
-    $1 = sw.constant 1.000000e+00 : f64
-    ```
+  ```
+  sw.store %1, %2 [0, 0, 1] : f64 to (!sw.memref<3x3x3xf64>, i32)
+  ```
+- addi
 
--   getID
+  加法, 主要用于坐标运算
 
-    获取当前从核号
+  ```
+  %2 = sw.addi %0, %1 : i32
+  ```
+- subi
 
-    ```
-    $1 = sw.getID : I64
-    ```
+  减法, 主要用于坐标运算
 
--   addf
+  ```
+  %2 = sw.subi %0, %1 : i32
+  ```
+- muli
 
-    加法
+  乘法, 主要用于坐标运算
 
-    ```
-    %2 = sw.addf %0, %1 : f64
-    ```
+  ```
+  %2 = sw.muli %0, %1 : i32
+  ```
+- memcpy
 
--   subf
+  LDM和主存之间内存传输，分为两个方向
 
-    减法
+  ```
+  sw.memcpyToLDM %mem_addr, %ldm_addr [%i, %j, %k] : z_dim(3) cnt(4) stride(5) bsize(6) : (!sw.memref<6x6x6xf64>, !sw.memref<6x6x6xf64>, i64)
+  sw.memcpyToMEM %ldm_addr, %mem_addr [%i, %j, %k] : z_dim(3) cnt(4) stride(5) bsize(6) : (!sw.memref<6x6x6xf64>, !sw.memref<6x6x6xf64>, i64)
+  ```
+- allocOp
 
-    ```
-    %2 = sw.subf %0, %1 : f64
-    ```
+  为指定的类型申请内存空间
 
--   mulf
+  ```
+  %3 = sw.alloc : !sw.memref<6x6x6xf64>
+  ```
+- deAllocOp
 
-    乘法
+  释放指定变量的内存空间
 
-    ```
-    %2 = sw.mulf %0, %1 : f64
-    ```
+  ```
+  sw.dealloc %1
+  ```
+- getMpiRank
 
--   divf
+  获取主核进程在整个通信域的Rank
 
-    除法
+  ```
+  %0 = sw.getMpiRank
+  ```
+- mpiExchageHalo
 
-    ```
-    %2 = sw.divf %0, %1 : f64
-    ```
+  在通信域中交换halo区域, 其中rank为本进程在整个通信域的rank
 
--   store
+  ```
+  sw.mpiExchangeHalo %input, %rank : mpiTile([1,1,1]) mpiHalo([1,1,1]:[1,1,1]) : !sw.memref<6x6x6xf64>
+  ```
 
-    将结果写回到指定位置
+---
 
-    ```
-    sw.store %1, %2 [0, 0, 1] : f64 to (!sw.memref<3x3x3xf64>, i32)
-    ```
-    
--   addi
+NOTE：未来可能需要支持
 
-    加法, 主要用于坐标运算
+- if
 
-    ```
-    %2 = sw.addi %0, %1 : i32
-    ```
-    
--   subi
+  if语句
+- else
 
-    减法, 主要用于坐标运算
-
-    ```
-    %2 = sw.subi %0, %1 : i32
-    ```
-    
--   muli
-
-    乘法, 主要用于坐标运算
-
-    ```
-    %2 = sw.muli %0, %1 : i32
-    ```
-    
--   memcpy
-
-    LDM和主存之间内存传输，分为两个方向
-
-    ```
-    sw.memcpyToLDM %mem_addr, %ldm_addr [%i, %j, %k] : z_dim(3) cnt(4) stride(5) bsize(6) : (!sw.memref<6x6x6xf64>, !sw.memref<6x6x6xf64>, i64)
-    sw.memcpyToMEM %ldm_addr, %mem_addr [%i, %j, %k] : z_dim(3) cnt(4) stride(5) bsize(6) : (!sw.memref<6x6x6xf64>, !sw.memref<6x6x6xf64>, i64)
-    ```
-
--   allocOp
-
-    为指定的类型申请内存空间
-
-    ```
-    %3 = sw.alloc : !sw.memref<6x6x6xf64>
-    ```
-
--   deAllocOp
-
-    释放指定变量的内存空间
-
-    ```
-    sw.dealloc %1
-    ```
-
--	
-    ------
-
-    NOTE：未来可能需要支持
-
--   if
-
-    if语句
-
--   else
-
-    else语句
+  else语句

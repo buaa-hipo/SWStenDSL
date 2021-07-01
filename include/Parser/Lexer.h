@@ -44,16 +44,17 @@ enum Token : int {
     tok_double = -4,
     tok_iteration = -5,
     tok_mpiTile = -6,
-    tok_operation = -7,
-    tok_domain = -8,
-    tok_kernel = -9,
-    tok_tile = -10,
-    tok_swCacheAt = -11,
-    tok_Expr = -12,
+    tok_mpiHalo = -7,
+    tok_operation = -8,
+    tok_domain = -9,
+    tok_kernel = -10,
+    tok_tile = -11,
+    tok_swCacheAt = -12,
+    tok_Expr = -13,
 
     // primary
-    tok_identifier = -13,
-    tok_number = -14,
+    tok_identifier = -14,
+    tok_number = -15,
 };
 
 enum ValueType : int{
@@ -158,6 +159,8 @@ private:
                 return tok_iteration;
             if (identifierStr == "mpiTile")
                 return tok_mpiTile;
+            if (identifierStr == "mpiHalo")
+                return tok_mpiHalo;
             if (identifierStr == "operation")
                 return tok_operation;
             if (identifierStr == "domain")

@@ -1,6 +1,7 @@
 stencil laplaceWithNumberAddInput(double input[72][18][16]) {
     iteration(100)
     mpiTile(1, 1, 1)
+    mpiHalo([1,1][1,1][1,1])
     operation(AddInput)
 
     kernel laplaceWithParam {

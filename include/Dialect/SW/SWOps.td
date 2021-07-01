@@ -885,4 +885,74 @@ def SW_DeAllocOp : SW_Op<"dealloc", []> {
         }]>
     ];
 }
+
+//============================================================================//
+// getMpiRank操作, 用于获取当前主核进程在整个通信域的rank
+//============================================================================//
+def SW_GetMpiRankOp : SW_Op<"getMpiRank",[]> {
+    let summary = "getMpiRank operation";
+    let description = [{
+        The `getMpiRank` operation get the rank of mpi process.
+    }];
+
+    let results = (outs I32:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state", [{
+            state.addTypes({builder.getI32Type()});
+        }]>
+    ];
+}
+
+//============================================================================//
+// mpiExchangeHalo操作, 在主核之间交换数据
+//============================================================================//
+def SW_MpiExchangeHaloOp : SW_Op<"mpiExchangeHalo", []> {
+    let summary = "mpi data exchange";
+    let description = [{
+        The `mpiExchange` operation transfer data between mpi process.
+    }];
+
+    // 传入参数
+    let arguments = (ins SW_MemRef:$dataArray, I32:$rank, 
+                        Confined<I64ArrayAttr, [ArrayMinCount<2>]>:$mpiTile,
+                        Confined<I64ArrayAttr, [ArrayMinCount<2>]>:$mpiHaloL,
+                        Confined<I64ArrayAttr, [ArrayMinCount<2>]>:$mpiHaloU);
+    
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "Value dataArray, Value rank, ArrayRef<int64_t> mpiTile,"
+                    "ArrayRef<int64_t> mpiHaloL, ArrayRef<int64_t> mpiHaloU", [{
+            state.addOperands({dataArray, rank});
+            state.addAttribute(getMpiTileName(), builder.getI64ArrayAttr(mpiTile));
+            state.addAttribute(getMpiHaloLName(), builder.getI64ArrayAttr(mpiHaloL));
+            state.addAttribute(getMpiHaloUName(), builder.getI64ArrayAttr(mpiHaloU));
+        }]>
+    ];
+
+    // 有效性检查
+    let verifier = [{
+        // mpiTile, mpiHaloL, mpiHaloU的维度必须相同
+        int mpiTileSize = mpiTile().size();
+        int mpiHaloLSize = mpiHaloL().size();
+        int mpiHaloUSize = mpiHaloU().size();
+
+        if (mpiTileSize < 2 || mpiTileSize > 3)
+            return emitOpError("mpiTile's and mpiHalo's dimension must is 2 or 3");
+        
+        if (mpiTileSize == mpiHaloLSize && mpiTileSize == mpiHaloUSize)
+            return success();
+        
+        return emitOpError("mpiTile and mpiHalo must have same dimension");
+    }];
+
+    // 辅助函数
+    let extraClassDeclaration = [{
+        static StringRef getMpiTileName() { return "mpiTile"; }
+        static StringRef getMpiHaloLName() { return "mpiHaloL"; }
+        static StringRef getMpiHaloUName() { return "mpiHaloU"; }
+    }];
+}
 #endif // end of _DIALECT_SW_SW_OPS_TD_

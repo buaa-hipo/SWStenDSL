@@ -1,6 +1,8 @@
 stencil laplace(double input[72][18][16]) {
     iteration(10)
     operation(laplaceKernel)
+    mpiTile(3, 3, 3)
+    mpiHalo([1,1][1,1][0,0])
 
     kernel laplaceKernel {
         tile(5, 4, 4)

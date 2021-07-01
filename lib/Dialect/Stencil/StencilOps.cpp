@@ -236,7 +236,31 @@ static ParseResult parseIterationOp(OpAsmParser &parser, OperationState &state)
     Attribute valueAttr;
     if (failed(parser.parseAttribute(valueAttr, stencil::IterationOp::getIterNumAttrName(), state.attributes)))
         return failure();
-    
+
+    // 解析mpi划分及mpi通信halo, 如果能够解析完迭代次数之后的符号为逗号, 则说明还需要解析mpi划分及通信halo
+    if (succeeded(parser.parseOptionalComma())) {
+        ArrayAttr mpiTileAttr;
+        ArrayAttr mpiHaloAttrL, mpiHaloAttrU;
+        // 解析mpi划分
+        if (failed(parser.parseAttribute(mpiTileAttr, stencil::IterationOp::getMpiTileAttrName(), state.attributes)))
+            return failure();
+        // 解析mpiHalo
+        // 首先解析逗号及左括号
+        if (failed(parser.parseComma()) || failed(parser.parseLParen()))
+            return failure();
+        // 解析HaloL
+        if (failed(parser.parseAttribute(mpiHaloAttrL, stencil::IterationOp::getMpiHaloLAttrName(), state.attributes)))
+            return failure();
+        // 解析冒号
+        if (failed(parser.parseColon()))
+            return failure();
+        // 解析HaloU
+        if (failed(parser.parseAttribute(mpiHaloAttrU, stencil::IterationOp::getMpiHaloUAttrName(), state.attributes)))
+            return failure();
+        // 解析右括号
+        if (failed(parser.parseRParen()))
+            return failure();
+    }
     if (failed(parser.parseRParen())) // 解析最外层右括号
         return failure();
 
@@ -270,7 +294,20 @@ static void print(stencil::IterationOp iterationOp, OpAsmPrinter &printer)
     printer << "), ";
 
     // 输出迭代次数
-    printer << iterationOp.iterNum() << ")";
+    printer << iterationOp.iterNum();
+
+    // 如果mpiTile有值, 则需要将其输出
+    if (iterationOp.mpiTile().hasValue()) {
+        printer<< ", " << iterationOp.mpiTile().getValue();
+    }
+
+    // 如果mpiHaloL和mpiHaloU有值, 则需要将其输出
+    if (iterationOp.mpiHaloL().hasValue() && iterationOp.mpiHaloU().hasValue()) {
+        printer << ", (" << iterationOp.mpiHaloL().getValue() << ":"\
+                << iterationOp.mpiHaloU().getValue() << ")";
+    }
+
+    printer << ")";
 }
 
 //============================================================================//

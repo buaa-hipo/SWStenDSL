@@ -141,7 +141,8 @@ private:
 
         // 解析定义体
         int iteration=0;
-        std::vector<int> mpiTile;
+        std::vector<int64_t> mpiTile;
+        std::vector<std::pair<int64_t, int64_t>> mpiHalo;
         std::string operation;
         std::vector<std::unique_ptr<KernelAST>> kernelList;
 
@@ -179,7 +180,7 @@ private:
                     // 解析数字
                     if (lexer.getCurToken() != tok_number || lexer.getValueType() != type_Integer)
                         return parseError<StencilAST>("Integer", "in stencil define body");
-                    mpiTile.push_back((int)lexer.getValue());
+                    mpiTile.push_back((int64_t)lexer.getValue());
                     lexer.consume(tok_number);
 
                     // 解析数字之间的逗号, 此处跳出只能是右括号, 后续解析右括号时会做相应检查
@@ -193,6 +194,52 @@ private:
                 // 解析右括号
                 if (lexer.getCurToken() != ')')
                     return parseError<StencilAST>(")" , "in stencil define body");
+                lexer.consume(Token(')'));
+            } else if (lexer.getCurToken() == tok_mpiHalo) {
+                lexer.consume(tok_mpiHalo);
+                // 解析左括号
+                if (lexer.getCurToken() != '(')
+                    return parseError<StencilAST>("(", "in stencil define body");
+                lexer.consume(Token('('));
+                // 解析mpiHalo信息
+                do {
+                    if (lexer.getCurToken() != '[')
+                        return parseError<StencilAST>("]", "in stencil define body");
+                    lexer.consume(Token('['));
+
+                    // 解析对应维度的halo
+                    // 指代某一维度的halo, halo_a代表的是与坐标轴反方向的halo,
+                    // 而halo_b则表示的是与坐标轴方向相同的halo
+                    // 简而言之就是halo_a指代的偏移是负的, 以正值进行保存
+                    // halo_b指代的偏移是正的, 以正值保存
+                    int64_t halo_a, halo_b;
+                    // halo_a
+                    if (lexer.getCurToken() != tok_number || lexer.getValueType() != type_Integer)
+                        return parseError<StencilAST>("Integer", "in stencil define body");
+                    halo_a = (int64_t)lexer.getValue();
+                    lexer.consume(tok_number);
+
+                    // 解析数字之间的逗号
+                    if (lexer.getCurToken() != ',')
+                        return parseError<StencilAST>(",", "in stencil define body");
+                    lexer.consume(Token(','));
+
+                    // halo_b
+                    if (lexer.getCurToken() != tok_number || lexer.getValueType() != type_Integer)
+                        return parseError<StencilAST>("Integer", "in stencil define body");
+                    halo_b = (int64_t)lexer.getValue();
+                    lexer.consume(tok_number);
+
+                    std::pair<int64_t, int64_t> halo_ab(halo_a, halo_b);
+                    mpiHalo.push_back(halo_ab);
+
+                    if (lexer.getCurToken() != ']')
+                        return parseError<StencilAST>("]", "in stencil define body");
+                    lexer.consume(Token(']'));
+                } while (lexer.getCurToken() == '['); // 如果还有'['则证明解析还未结束
+                // 解析右括号
+                if (lexer.getCurToken() != ')')
+                    return parseError<StencilAST>(")", "in stencil define body");
                 lexer.consume(Token(')'));
             } else if (lexer.getCurToken() == tok_operation) {
                 lexer.consume(tok_operation);
@@ -227,7 +274,7 @@ private:
         for (int argIter = 0; argIter < args.size(); argIter++) {
             args[argIter]->setArrayType(arrayNameAndAccessPatternMapping[args[argIter]->getName().str()]);
         }
-        return std::make_unique<StencilAST>(loc, std::move(kernelList), stencilName, std::move(args), iteration, mpiTile, operation);
+        return std::make_unique<StencilAST>(loc, std::move(kernelList), stencilName, std::move(args), iteration, mpiTile, mpiHalo, operation);
     }
 
     std::unique_ptr<KernelAST> parseKernel() {
@@ -298,29 +345,29 @@ private:
                 lexer.consume(tok_domain);
                 // 解析左括号
                 if (lexer.getCurToken() != '(')
-                    return parseError<KernelAST>("(", "in stencil define body");
+                    return parseError<KernelAST>("(", "in kernel define body");
                 lexer.consume(Token('('));
                 // 解析domain信息
                 do {
                     if (lexer.getCurToken() != '[')
-                        return parseError<KernelAST>("[", "in stencil define");
+                        return parseError<KernelAST>("[", "in kernel define body");
                     lexer.consume(Token('['));
 
                     // 解析某维度的上下界
                     int64_t lb, ub;
                     // 下界
                     if (lexer.getCurToken() != tok_number || lexer.getValueType() != type_Integer)
-                        return parseError<KernelAST>("Integer", "in stencil define");
+                        return parseError<KernelAST>("Integer", "in kernel define body");
                     lb = (int64_t)lexer.getValue();
                     lexer.consume(tok_number);
                     // 解析数字之间的逗号
                     if (lexer.getCurToken() != ',')
-                        return parseError<KernelAST>(",", "in stencil define");
+                        return parseError<KernelAST>(",", "in kernel define body");
                     lexer.consume(Token(','));
 
                     // 上界
                     if (lexer.getCurToken() != tok_number || lexer.getValueType() != type_Integer)
-                        return parseError<KernelAST>("Integer", "in stencil define");
+                        return parseError<KernelAST>("Integer", "in kernel define body");
                     ub = (int64_t)lexer.getValue();
                     lexer.consume(tok_number);
 
@@ -328,12 +375,12 @@ private:
                     domainRange.push_back(lbAndub);
 
                     if (lexer.getCurToken() != ']')
-                        return parseError<KernelAST>("]", "in stencil define");
+                        return parseError<KernelAST>("]", "in kernel define body");
                     lexer.consume(Token(']'));
                 } while (lexer.getCurToken() == '['); // 如果还有'['则证明解析还未结束
                 // 解析右括号
                 if (lexer.getCurToken() != ')')
-                    return parseError<KernelAST>(")", "in stencil define body");
+                    return parseError<KernelAST>(")", "in kernel define body");
                 lexer.consume(Token(')'));
             } else if (lexer.getCurToken() == tok_Expr) {
                 lexer.consume(tok_Expr);

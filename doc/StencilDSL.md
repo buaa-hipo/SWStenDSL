@@ -8,6 +8,7 @@ stencil laplaceAddInputWithParamter(double U[72][18][16], c[5])
 	iteration(100)
 	mpiTile(2, 2, 2)
 	operation(kernelName2)
+	mpiHalo([1,1][1,1][1,1])
 
 	kernel kernelName1{
 		tile(5, 4, 4)

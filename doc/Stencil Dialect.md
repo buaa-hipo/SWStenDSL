@@ -18,7 +18,7 @@
 
 -    apply
 
-     在给定的结构化网格上（Field类型）执行具体的stencil计算，并返回结果（Field类型）
+     在给定的结构化网格上（Field类型）执行具体的stencil计算，并返回结果（Field类型）, cacheAt为神威专有, 对于其他体系结构可以省略
 
      Example：
 
@@ -81,12 +81,12 @@
 
 -   iteration
 
-    指定函数迭代的次数以及多次的迭代的传参
+    指定函数多次的迭代的传参, 迭代的次数, 以及mpi的划分, mpi交换的halo(顺序为最高维度到最低维度, 前面的一项指代对应维度与座标轴反方向的halo区域, 在表达式中的偏移量为负数, 但此处以正数表示, 同理, 后面一项表示的是与坐标轴同向的halo区域, 在表达式中为正数), 后面两个参数为可选, 仅在大规模计算时启用
 
     Example:
 
     ```
-    stencil.iteration @test((%arg0: f32, %arg1 : sw.memref<4xf32>), (%arg1 : sw.memref<4xf32>, %arg0: f32), 5)
+    stencil.iteration @test((%arg0: f32, %arg1 : sw.memref<4xf32>), (%arg1 : sw.memref<4xf32>, %arg0: f32), 5, [1,1,1], ([1,1,]:[1,1,1])
     ```
 
     

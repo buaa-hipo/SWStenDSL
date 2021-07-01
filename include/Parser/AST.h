@@ -192,7 +192,8 @@ private:
     std::string name;                                   // stencil名称
     std::vector<std::unique_ptr<VarDeclExprAST>> args;  // 参数列表
     int iteration;                                      // 迭代次数
-    std::vector<int> mpiTile;                           // mpiTile划分
+    std::vector<int64_t> mpiTile;                       // mpiTile划分
+    std::vector<std::pair<int64_t, int64_t>> mpiHalo;   // mpi交换的halo
     std::string operation;                              // 输出结果的kernel名称
 
     std::vector<std::unique_ptr<KernelAST>> kernelList;
@@ -202,11 +203,12 @@ private:
 public:
     StencilAST(Location loc, std::vector<std::unique_ptr<KernelAST>> kernelList, std::string name,
             std::vector<std::unique_ptr<VarDeclExprAST>> args, int iteration, 
-            std::vector<int> mpiTile, std::string operation) {
+            std::vector<int64_t> mpiTile, std::vector<std::pair<int64_t, int64_t>> mpiHalo, std::string operation) {
         this->location = loc;
         this->name = name;
         this->args = std::move(args);
         this->iteration = iteration;
+        this->mpiHalo = mpiHalo;
         this->mpiTile = mpiTile;
         this->operation = operation;
         this->kernelList = std::move(kernelList);
@@ -216,7 +218,8 @@ public:
     llvm::StringRef getName() { return name; }
     llvm::ArrayRef<std::unique_ptr<VarDeclExprAST>> getArgs() { return args; }
     int getIteration() { return iteration; }
-    std::vector<int> getMpiTile() { return mpiTile; }
+    std::vector<int64_t> getMpiTile() { return mpiTile; }
+    std::vector<std::pair<int64_t, int64_t>> getMpiHalo() { return mpiHalo; }
     llvm::StringRef getOperation() { return operation; }
     llvm::ArrayRef<std::unique_ptr<KernelAST>> getKernelList() { return kernelList; }
 };
