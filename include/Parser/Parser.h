@@ -480,7 +480,7 @@ private:
 
         // 处理完可能存在的'-'号后, 检查是否为浮点数
         if (lexer.getCurToken() != tok_number)
-            return parseError<BinaryExprAST>("float point number", "in exper define");
+            return parseError<BinaryExprAST>("float point number", "in expr define");
 
         auto result = std::make_unique<NumberExprAST>(std::move(loc), lexer.getValue()*flag, domainType);
         lexer.consume(tok_number);

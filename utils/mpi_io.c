@@ -9,6 +9,7 @@
  * 
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "mpi_io.h"
@@ -262,6 +263,86 @@ void swsten_recv_data_3D_##TYPE(TYPE *recvArray, int recvArrayDim2, int recvArra
     }\
 }
 
+/* 获取十进制数的位数 */
+int get_digit_of_int(int x) 
+{
+    int res = 0;
+    while (x) {
+        res += 1;
+        x /= 10;
+    }
+    return res;
+}
+
+/* 从文件加载数据*/
+#define LOAD_DATA_FROM_FILE(TYPE, FMT)\
+void swsten_load_data_from_file_##TYPE(const char *filename, TYPE *array, const int size)\
+{\
+    int my_rank = 0;\
+    int comm_size = 0;\
+    int cnt = 0;\
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);\
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);\
+    int real_filename_len = strlen(filename) + get_digit_of_int(comm_size);\
+    char *real_filename = (char *)malloc(sizeof(char)*real_filename_len);\
+    strcpy(real_filename, filename);\
+    sprintf(&real_filename[strlen(real_filename)], "%d", my_rank);\
+\
+    FILE *fp = fopen(real_filename, "r");\
+    if (fp == NULL) {\
+        printf("WARNING: Failed to open file %s in process %d\n", real_filename, my_rank);\
+        printf("Generate random data for compute instead.\n");\
+        for (cnt = 0; cnt < size; cnt ++) {\
+            TYPE value = rand() % 50;\
+            array[cnt] = value;\
+        }\
+        return;\
+    }\
+\
+    /* read data from file */\
+    for (cnt = 0; cnt < size; cnt++) {\
+        if (fscanf(fp, FMT, &array[cnt]) <= 0)\
+            break;\
+    }\
+    if (cnt < size)\
+        printf("WARNING: From file %s : got %d raw data, which is less than size %d !\n", filename, cnt, size);\
+\
+    fclose(fp);\
+    free(real_filename);\
+}
+
+/*将结果写回文件*/
+#define STORE_DATA_TO_FILE(TYPE, FMT)\
+void swsten_store_data_to_file_##TYPE(const char *filename, TYPE *array, const int size, const int line_len)\
+{\
+    int my_rank = 0;\
+    int comm_size = 0;\
+    int cnt = 0;\
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);\
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);\
+    int real_filename_len = strlen(filename) + get_digit_of_int(comm_size);\
+    char *real_filename = (char *)malloc(sizeof(char)*real_filename_len);\
+    strcpy(real_filename, filename);\
+    sprintf(&real_filename[strlen(real_filename)], "%d", my_rank);\
+\
+    FILE *fp = fopen(real_filename, "w");\
+    if (fp == NULL) {\
+        printf("ERROR: Failed to open file %s in process %d\n", real_filename, my_rank);\
+        exit(EXIT_FAILURE);\
+    }\
+\
+    /* store data to file */\
+    for (cnt = 0; cnt < size; cnt++) {\
+        fprintf(fp, FMT, array[cnt]);\
+        if ((cnt+1) % line_len == 0)\
+            fprintf(fp, "\n");\
+    }\
+\
+    fclose(fp);\
+    free(real_filename);\
+}
+
+
 LOAD_DATA_2D(float)
 LOAD_DATA_2D(double)
 STORE_DATA_2D(float)
@@ -279,3 +360,8 @@ SEND_DATA_3D(float, MPI_FLOAT)
 SEND_DATA_3D(double, MPI_DOUBLE)
 RECV_DATA_3D(float, MPI_FLOAT)
 RECV_DATA_3D(double, MPI_DOUBLE)
+
+LOAD_DATA_FROM_FILE(float, "%f")
+LOAD_DATA_FROM_FILE(double, "%lf")
+STORE_DATA_TO_FILE(float, "%f ")
+STORE_DATA_TO_FILE(double, "%lf ")
