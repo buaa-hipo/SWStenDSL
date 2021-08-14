@@ -131,6 +131,7 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
 //============================================================================//
 def Stencil_AccessOp : Stencil_Op<"access", [
     DeclareOpInterfaceMethods<OffsetOp>,
+    DeclareOpInterfaceMethods<ShiftOp>,
     NoSideEffect]> {
     let summary = "stencil access operation, visit the point at specfic offset of current point";
     let description = [{

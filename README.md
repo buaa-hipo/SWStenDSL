@@ -32,7 +32,7 @@ cmake --build . --target install
 ### Build SWStenDSL project
 
 ```bash
-https://github.com/JackMoriarty/SWStenDSL.git
+git clone https://github.com/JackMoriarty/SWStenDSL.git
 cd SWStenDSL
 export LLVM_INSTALL=<path_to_llvm_install>
 export LLVM_BUILD=<path_to_llvm_build_directory>

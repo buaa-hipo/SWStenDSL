@@ -24,6 +24,7 @@
 
 #include "Dialect/Stencil/StencilDialect.h"
 #include "Dialect/SW/SWDialect.h"
+#include "Dialect/Stencil/Passes.h"
 #include "Conversion/StencilToSW/Passes.h"
 
 using namespace mlir;
@@ -56,6 +57,9 @@ static cl::opt<enum Action> emitAction(
     cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
     cl::values(clEnumValN(DumpSW, "sw", "output the SW dump"))
 );
+
+static cl::opt<bool> kernelFusionPassAction(
+    "kernel-fusion", cl::init(false), cl::desc("stencil kernel fusion pass"));
 
 // 解析输入的文件, 并构造抽象语法树, 如果发生错误则返回nullptr
 std::unique_ptr<swsten::ModuleAST> parseInputFile(llvm::StringRef filename) {
@@ -131,6 +135,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     mlir::PassManager pm(&context);
     // 应用命令行传递过来的通用选项
     applyPassManagerCLOptions(pm);
+
+    // 检查是否启用kernel融合
+    if (kernelFusionPassAction)
+        pm.addPass(mlir::createStencilKernelFusionPass());
 
     // 检查是否需要下降到sw Dialect
     bool isLoweringToSW = emitAction == Action::DumpSW;

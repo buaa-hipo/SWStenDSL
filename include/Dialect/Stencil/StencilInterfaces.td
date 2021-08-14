@@ -75,4 +75,26 @@ def OffsetOp : OpInterface<"OffsetOp"> {
         }]>
     ];
 }
+
+def ShiftOp : OpInterface<"ShiftOp"> {
+  let description = [{
+    Interface to shift the operation offset.
+  }];
+
+  let methods = [
+    InterfaceMethod<"/*Shift operation by a constant offset*/",
+      "void", "shiftByOffset", (ins "ArrayRef<int64_t>":$offset), [{}],
+        /*defaultImplementation=*/[{
+        SmallVector<Attribute, kIndexSize> offsetAttr;
+        for (auto elem : llvm::zip(offset, $_op.offset())) {
+          offsetAttr.push_back(IntegerAttr::get(
+              IntegerType::get(64, $_op.getContext()),
+              std::get<1>(elem).template cast<IntegerAttr>().getValue().getSExtValue() + 
+              std::get<0>(elem)));
+        }
+        $_op.offsetAttr(ArrayAttr::get(offsetAttr, $_op.getContext()));
+    }]>,
+  ];
+}
+
 #endif // end of _DIALECT_STENCIL_STENCIL_INTERFACES_TD_
