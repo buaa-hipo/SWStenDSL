@@ -10,6 +10,7 @@
  */
 
 #include <mlir/Dialect/Affine/IR/AffineOps.h>
+#include <mlir/Dialect/Vector/VectorOps.h>
 #include <mlir/Dialect/SCF/SCF.h>
 #include <mlir/Dialect/StandardOps/IR/Ops.h>
 #include <mlir/IR/AffineMap.h>
@@ -129,6 +130,15 @@ public:
         auto applyOp = cast<stencil::ApplyOp>(operation);
         auto shapeOp = cast<ShapeOp>(operation);
 
+        // 判断是否需要启用了向量化, 如果启用了, 则最内层循环的增量设置为向量宽度
+        bool is_enable_vector = false;
+        unsigned int vectorWidth = 1;
+        auto vectorMaskedLoadOps = applyOp.getOps<vector::MaskedLoadOp>();
+        if (!vectorMaskedLoadOps.empty()) {
+            is_enable_vector = true;
+            vectorWidth = (*(vectorMaskedLoadOps.begin())).getResult().getType().cast<VectorType>().getShape()[0];
+        }
+
         /****************** 计算cacheRead和cacheWrite的大小 *********************/
         // 获取cache所在循环位置
         int64_t cacheAt = applyOp.getCacheAtAttr().cast<IntegerAttr>().getValue().getSExtValue();
@@ -230,7 +240,7 @@ public:
             int64_t tile = applyOp.getTile()[i];
             lbs.push_back(rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(0), rewriter.getI64Type()));
             ubs.push_back(rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(tile), rewriter.getI64Type()));
-            int64_t step = returnOp.unroll().hasValue() ? returnOp.getUnroll()[i] : 1;
+            int64_t step = (i == shapeOp.getRank() - 1 && is_enable_vector) ? vectorWidth : (returnOp.unroll().hasValue() ? returnOp.getUnroll()[i] : 1);
             steps.push_back(rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(step), rewriter.getI64Type()));
         }
 
@@ -488,8 +498,10 @@ public:
         auto launchOpCacheRead = launchOp.getCacheReadAttributions();
         int cacheReadIndex;
         for (auto elem : llvm::enumerate(launchOp.getOperands())) {
-            if (elem.value() == operands[0])
+            if (elem.value() == operands[0]) {
                 cacheReadIndex = elem.index();
+                break;
+            }
         }
 
         // 替换Op
@@ -506,6 +518,8 @@ public:
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
         auto storeOp = cast<stencil::StoreOp>(operation);
+
+        bool is_enable_vector = false;
         
         // 获取对应的returnOp
         OpOperand *operand = valueToOperand[storeOp.res()];
@@ -517,6 +531,9 @@ public:
         // 如果store操作存在一个输入(循环展开时有的store可能没有相应待存储的数值, 
         // 特别是循环维度无法被展开层数整除时)
         if (storeOp.operands().size() == 1) {
+            if (operands[0].getType().isa<VectorType>())
+                is_enable_vector = true;
+
             // 获取问题域维度
             auto haloLArray = valueToLB[returnOp.operands()[0]];
             auto domainDim = haloLArray.size();
@@ -562,7 +579,10 @@ public:
                 }
             }
             // 创建写回操作
-            rewriter.create<sw::StoreOp>(loc, operands[0], cacheWriteArray, storePos);
+            if (is_enable_vector)
+                rewriter.create<sw::VectorStoreUOp>(loc, operands[0], cacheWriteArray, storePos);
+            else
+                rewriter.create<sw::StoreOp>(loc, operands[0], cacheWriteArray, storePos);
         }
         // 删除原来的Op
         rewriter.eraseOp(operation);
@@ -767,6 +787,105 @@ public:
     }
 };
 
+class VectorMaskedLoadOpLowering : public StencilOpToSWPattern<vector::MaskedLoadOp> {
+public:
+    using StencilOpToSWPattern<vector::MaskedLoadOp>::StencilOpToSWPattern;
+
+    LogicalResult
+    matchAndRewrite(Operation *operation, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const override {
+        auto loc = operation->getLoc();
+        auto vectorMaskedLoadOp = cast<vector::MaskedLoadOp>(operation);
+
+        // 获取对应的stencil.castToMemRef, constant_mask, 以及该op使用的constant
+        // 这三者只是为了适配接口, 可以删除
+        auto castToMemRefOp = operands[0].getDefiningOp();
+        auto constantMaskOp = operands[1].getDefiningOp();
+        auto constantOp = operands[2].getDefiningOp();
+        auto offsetOp = cast<OffsetOp>(castToMemRefOp);
+        auto resType = vectorMaskedLoadOp.getResult().getType().cast<VectorType>();
+        unsigned int vectorWidth = resType.getShape()[0];
+        auto elementType = resType.getElementType();
+
+        // 获取基准位置, 按照约定, 收集3个即可
+        SmallVector<Value, 3> basePos;
+        auto forOp = operation->getParentOfType<sw::ForOp>();
+        forOp.walk([&](sw::AddiOp addiOp) {
+            if (basePos.size() > 3)
+                return;
+            basePos.push_back(addiOp.getResult());
+        });
+
+        // 计算位置
+        SmallVector<Value, 3> vectorLoadOffset;
+        for (auto elem : llvm::enumerate(offsetOp.getOffset())) {
+            auto offset_value = 
+                rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(elem.value()), rewriter.getI64Type());
+            Value offset_index = 
+                rewriter.create<sw::AddiOp>(loc, rewriter.getI64Type(), basePos[elem.index()], offset_value);
+            vectorLoadOffset.push_back(offset_index);
+        }
+
+        // 找到对应的cacheRead数组
+        auto launchOp = operation->getParentOfType<sw::LaunchOp>();
+        auto launchOperands = launchOp.getOperands();
+        // getOperand返回的是未修改之前的op定义的值, 此处的castToMemReefOperand为applyOp
+        // 定义的value, 而lowering函数(即本下降函数)的operands为修改之后的op定义的value,
+        // 因此,此处不能loadlowring或accesslowering那样, 通过launchOp去寻找对应的cache数组
+        // 位置下标(主要是此处无法通过castToMemRefpOp的getOperand函数获取到更改前面依赖op后的value)
+        // 考虑到applyOp和launchOp在读数组上顺序相同, 故在进行所有下降之前先建立apply的operands与位置
+        // 的绑定关系, 此处即可直接利用该绑定关系获取cacheRead的位置索引
+        Value castToMemRefOperand = castToMemRefOp->getOperand(0);
+        auto launchOpCacheRead = launchOp.getCacheReadAttributions();
+        int cacheReadIndex = -1;
+        if (valueToApplyOpIndex.find(castToMemRefOperand) != valueToApplyOpIndex.end()) {
+            cacheReadIndex = valueToApplyOpIndex[castToMemRefOperand];
+        }
+
+        // 创建一个constant op 用来vector 变量声明
+        SmallVector<APFloat, 4> attrValue;
+        bool is_double = (elementType.cast<FloatType>().getWidth() == 64);
+        for (int i = 0; i < vectorWidth; i++) {
+            if (is_double)
+                attrValue.push_back(APFloat((double)0));
+            else
+                attrValue.push_back(APFloat((float)0));
+        }
+
+        auto newConstantOpAttr = DenseFPElementsAttr::get(VectorType::get(vectorWidth, elementType), attrValue);
+        Value constantValue = rewriter.create<sw::ConstantOp>(loc, newConstantOpAttr, VectorType::get(vectorWidth, elementType));
+
+        // 替换Op
+        rewriter.create<sw::VectorLoadUOp>(loc, constantValue, launchOpCacheRead[cacheReadIndex], vectorLoadOffset);
+
+        // 删除无用的Op
+        rewriter.eraseOp(castToMemRefOp);
+        rewriter.eraseOp(constantMaskOp);
+        rewriter.eraseOp(constantOp);
+        rewriter.replaceOp(vectorMaskedLoadOp, constantValue);
+        return success();
+    }
+};
+
+class VectorBroadCastOpLowering : public StencilOpToSWPattern<vector::BroadcastOp> {
+public:
+    using StencilOpToSWPattern<vector::BroadcastOp>::StencilOpToSWPattern;
+
+    LogicalResult
+    matchAndRewrite(Operation *operation, ArrayRef<Value> operands,
+                    ConversionPatternRewriter &rewriter) const override {
+        auto loc = operation->getLoc();
+        auto vectorBroadCastOp = cast<vector::BroadcastOp>(operation);
+        auto resType = vectorBroadCastOp.getResult().getType().cast<VectorType>();
+        unsigned int vectorWidth = resType.getShape()[0];
+
+        // 直接替换为sw::vectorBroadCastOp
+        Value newResult = rewriter.create<sw::VectorBroadCastOp>(loc, operands[0], vectorWidth);
+        rewriter.replaceOp(operation, newResult);
+        return success();
+    }
+};
+
 //============================================================================//
 // 转换目标
 //============================================================================//
@@ -799,11 +918,13 @@ void StencilToSWPass::runOnOperation() {
     // 记录每个apply操作的下界, apply每个输入以及其中的store操作的参数与下界的绑定, 这样在变换相关操作时可以
     // 直接使用这个绑定关系
     DenseMap<Value, Index> valueToLB;
+    DenseMap<Value, unsigned int> valueToApplyOpIndex;
     module.walk([&](stencil::ApplyOp applyOp) {
         auto lb = cast<ShapeOp>(applyOp.getOperation()).getLB();
         // 建立参数和下界的绑定关系
         for (auto en : llvm::enumerate(applyOp.getOperands())) {
             valueToLB[applyOp.getBody()->getArgument(en.index())] = lb;
+            valueToApplyOpIndex[applyOp.getBody()->getArgument(en.index())] = en.index();
         }
         // 建立return操作的参数与下界的绑定关系
         for (auto value : applyOp.getBody()->getTerminator()->getOperands()) {
@@ -817,13 +938,16 @@ void StencilToSWPass::runOnOperation() {
     });
 
     StencilTypeConverter typeConverter(module.getContext());
-    populateStencilToSWConversionPatterns(typeConverter, valueToLB, valueToOperand, patterns);
+    populateStencilToSWConversionPatterns(typeConverter, valueToLB, 
+        valueToOperand, valueToApplyOpIndex, patterns);
 
     StencilToSWTarget target(*(module.getContext()));
     target.addLegalDialect<AffineDialect>();
     target.addLegalDialect<SCFDialect>();
     target.addLegalDialect<mlir::sw::SWDialect>();
     target.addDynamicallyLegalOp<FuncOp>();
+    target.addLegalOp<vector::ConstantMaskOp>();
+    target.addLegalOp<mlir::stencil::CastToMemRefOp>();
     target.addLegalOp<ModuleOp, ModuleTerminatorOp>();
 
     if (failed(applyFullConversion(module, target, patterns))) {
@@ -839,12 +963,16 @@ namespace stencil {
 // 填充转换模式列表
 void populateStencilToSWConversionPatterns(
     StencilTypeConverter &typeConverter, DenseMap<Value, Index> &valueToLB,
-        DenseMap<Value, OpOperand *> &valueToOperand,
+        DenseMap<Value, OpOperand *> &valueToOperand, 
+        DenseMap<Value, unsigned int> &valueToApplyOpIndex, 
         mlir::OwningRewritePatternList &patterns) {
     patterns.insert<FuncOpLowering, ApplyOpLowering, AccessOpLowering,
                     LoadOpLowering, StoreOpLowering, ReturnOpLowering,
                     CopyOpLowering, ConstantOpLowering, AddFOpLowering,
-                    SubFOpLowering, MulFOpLowering, DivFOpLowering, IterationOpLowering>(typeConverter, valueToLB, valueToOperand);
+                    SubFOpLowering, MulFOpLowering, DivFOpLowering, 
+                    IterationOpLowering, VectorMaskedLoadOpLowering, 
+                    VectorBroadCastOpLowering>(typeConverter, valueToLB, 
+                    valueToOperand, valueToApplyOpIndex);
 }
 
 //============================================================================//
@@ -870,10 +998,12 @@ StencilTypeConverter::StencilTypeConverter(MLIRContext *context_)
 StencilToSWPattern::StencilToSWPattern(
     StringRef rootOpName, StencilTypeConverter &typeConverter,
     DenseMap<Value, Index> &valueToLB,
-    DenseMap<Value, OpOperand *> &valueToOperand, PatternBenefit benefit)
+    DenseMap<Value, OpOperand *> &valueToOperand, 
+    DenseMap<Value, unsigned int> &valueToApplyOpIndex,
+    PatternBenefit benefit)
     : ConversionPattern(rootOpName, benefit, typeConverter.getContext()),
     typeConverter(typeConverter), valueToLB(valueToLB),
-    valueToOperand(valueToOperand) {}
+    valueToOperand(valueToOperand), valueToApplyOpIndex(valueToApplyOpIndex) {}
 
 // 获取嵌套循环的迭代变量
 SmallVector<Value, 6>
@@ -891,8 +1021,8 @@ StencilToSWPattern::getInductionVars(Operation *operation) const {
     return inductionVariables;
 }
 
-} // end of namespace mlir
 } // end of namespace stencil
+} // end of namespace mlir
 
 std::unique_ptr<Pass> mlir::createConvertStencilToSWPass() {
     return std::make_unique<StencilToSWPass>();

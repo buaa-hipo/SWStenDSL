@@ -581,9 +581,9 @@ def SW_AddfOp : SW_Op<"addf", []> {
     }];
 
     // 传入参数
-    let  arguments = (ins SW_Element:$lhs, SW_Element:$rhs);
+    let  arguments = (ins FloatLike:$lhs, FloatLike:$rhs);
     // 返回值
-    let results = (outs SW_Element:$res);
+    let results = (outs FloatLike:$res);
 
     let hasFolder = 1;
 
@@ -636,9 +636,9 @@ def SW_SubfOp : SW_Op<"subf", []> {
     }];
 
     // 传入参数
-    let  arguments = (ins SW_Element:$lhs, SW_Element:$rhs);
+    let  arguments = (ins FloatLike:$lhs, FloatLike:$rhs);
     // 返回值
-    let results = (outs SW_Element:$res);
+    let results = (outs FloatLike:$res);
     let hasFolder = 1;
 
     // 构造函数
@@ -690,9 +690,9 @@ def SW_MulfOp : SW_Op<"mulf", []> {
     }];
 
     // 传入参数
-    let  arguments = (ins SW_Element:$lhs, SW_Element:$rhs);
+    let  arguments = (ins FloatLike:$lhs, FloatLike:$rhs);
     // 返回值
-    let results = (outs SW_Element:$res);
+    let results = (outs FloatLike:$res);
     let hasFolder = 1;
 
     // 构造函数
@@ -744,9 +744,9 @@ def SW_DivfOp : SW_Op<"divf", []> {
     }];
 
     // 传入参数
-    let arguments = (ins SW_Element:$lhs, SW_Element:$rhs);
+    let arguments = (ins FloatLike:$lhs, FloatLike:$rhs);
     // 返回值
-    let results = (outs SW_Element:$res);
+    let results = (outs FloatLike:$res);
 
     // 构造函数
     let builders = [
@@ -842,6 +842,107 @@ def SW_MemcpyToMEMOp : SW_Op<"memcpyToMEM", []> {
         static StringRef getStrideAttrName() { return "stride"; }
         static StringRef getBsizeAttrName() { return "bsize"; }
     }];
+}
+
+//============================================================================//
+// 向量化不对界加载
+//============================================================================//
+def SW_VectorLoadUOp : SW_Op<"vectorLoadU", []> {
+    let summary = "SW vector loadu operation";
+    let description = [{
+        The `vectorLoadU` operation loads unaligned data into vector.
+    }];
+
+    // 传入参数
+    let arguments = (ins AnyVector:$dst, 
+                        SW_MemRef:$ldm_addr, 
+                        Variadic<AnyTypeOf<[I32, I64]>>:$pos);
+
+    // 构造函数
+    let skipDefaultBuilders = 1;
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, Value dst, "
+                    "Value src, ValueRange pos", [{
+            state.addOperands(dst);
+            state.addOperands(src);
+            state.addOperands(pos);
+        }]>
+    ];
+}
+
+//============================================================================//
+// 向量化不对界写回
+//============================================================================//
+def SW_VectorStoreUOp : SW_Op<"vectorStoreU", []> {
+    let summary = "SW vector storeu operation";
+    let description = [{
+        The `vectorStoreU` operation stores data into unaligned address.
+    }];
+
+    // 传入参数
+    let arguments = (ins AnyVector:$vectorData, 
+                        SW_MemRef:$ldm_addr, 
+                        Variadic<AnyTypeOf<[I32, I64]>>:$pos);
+
+    // 构造函数
+    let skipDefaultBuilders = 1;
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "Value src, Value dst, ValueRange pos", [{
+            state.addOperands(src);
+            state.addOperands(dst);
+            state.addOperands(pos);
+        }]>
+    ];
+}
+
+//============================================================================//
+// 向量化对界加载
+//============================================================================//
+def SW_VectorLoadOp : SW_Op<"vectorLoad", []> {
+    let summary = "SW vector load operation";
+    let description = [{
+        The `vectorLoad` operation loads aligned data into vector.
+    }];
+
+    // 传入参数
+    let arguments = (ins AnyVector:$dst, 
+                        SW_MemRef:$ldm_addr,
+                        Variadic<AnyTypeOf<[I32,I64]>>:$pos);
+    // 构造函数
+    let skipDefaultBuilders = 1;
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, Value dst, "
+                    "Value src, ValueRange pos", [{
+            state.addOperands(dst);
+            state.addOperands(src);
+            state.addOperands(pos);
+        }]>
+    ];
+}
+
+//============================================================================//
+// 将一个标量扩展为一个向量
+//============================================================================//
+def SW_VectorBroadCastOp : SW_Op<"vectorBroadCast", []> {
+    let summary = "SW vector BroadCast operation";
+    let description = [{
+        The `vectorBroadCast` operation broadcast a scalar value to vector value.
+    }];
+
+    // 传入参数
+    let arguments = (ins SW_Element:$input);
+    // 返回值
+    let results = (outs AnyVector:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, Value input, "
+        "unsigned vectorWidth", [{
+            state.addOperands(input);
+            state.addTypes(VectorType::get(vectorWidth, input.getType().cast<FloatType>()));
+        }]>
+    ];
 }
 
 //============================================================================//

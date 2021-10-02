@@ -10,6 +10,7 @@ set(LIBS
     Stencil
     SW
     StencilToSW
+    StencilToVector
     CodeGen
 )
 

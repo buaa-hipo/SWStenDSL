@@ -237,6 +237,32 @@
   ```
   sw.mpiExchangeHalo %input, %rank : mpiTile([1,1,1]) mpiHalo([1,1,1]:[1,1,1]) : !sw.memref<6x6x6xf64>
   ```
+- vectorLoadUOp
+
+  从指定位置(非对齐)处加载一个向量宽度的数据
+
+  ```
+  sw.vectorLoadU %1, %2 [0, 0, 1] : vector<4xf64> from (!sw.memref<3x3x3xf64>, i32)
+  ```
+- vectorLoadOp
+
+  从指定位置(对齐)处加载一个向量宽度的数据
+
+  ```
+  sw.vectorLoad %1, %2 [0, 0, 1] : vector<4xf64> from (!sw.memref<3x3x3xf64>, i32)
+  ```
+- vectorStoreUOp
+
+  将向量数据写回到指定偏移位置
+
+  ```
+  sw.vectorStoreU %1, %2 [0, 0, 1] : vector<4xf64> to (!sw.memref<3x3x3xf64>, i32)
+  ```
+- vectorBroadCastOp
+
+  ```
+  %0 = sw.vectorBroadCast %1 : f64 -> vector<4xf64>
+  ```
 
 ---
 

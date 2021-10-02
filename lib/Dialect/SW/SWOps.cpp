@@ -195,6 +195,135 @@ static ParseResult parseMemcpyOp(OpAsmParser &parser, OperationState &state)
     return success();
 }
 
+static ParseResult parseVectorLoadOpCommon(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 8> operands;
+    SmallVector<Type, 8> operandTypes;
+    OpAsmParser::OperandType currentOperand;
+    Type currentType;
+
+    // 解析参数列表
+    do {
+        if (failed(parser.parseOperand(currentOperand)))
+            return failure();
+
+        operands.push_back(currentOperand);
+    } while (succeeded(parser.parseOptionalComma())); // 解析逗号
+
+    // 解析偏移量
+    if (succeeded(parser.parseLSquare())) { // 解析左括号
+        do {
+            if (failed(parser.parseOperand(currentOperand)))
+                return failure();
+            operands.push_back(currentOperand);
+        } while(succeeded(parser.parseOptionalComma())); // 解析可能存在的逗号
+
+        if (failed(parser.parseRSquare())) // 解析右括号
+            return failure();
+    } else {
+        return failure();
+    }
+
+    // 解析参数类型
+    // 解析向量类型
+    if (failed(parser.parseColonType(currentType)))
+        return failure();
+    operandTypes.push_back(currentType);
+
+    if (failed(parser.parseOptionalKeyword("from")))
+        return failure();
+
+    if (succeeded(parser.parseLParen())) { // 解析左括号
+        // 解析矩阵类型
+        if (failed(parser.parseType(currentType)))
+            return failure();
+        operandTypes.push_back(currentType);
+
+        // 解析偏移量类型
+        if (failed(parser.parseComma())
+            || failed(parser.parseType(currentType)))
+            return failure();
+        for (int iter = 0; iter < operands.size()-2; iter++)
+            operandTypes.push_back(currentType);
+
+        if (failed(parser.parseRParen())) // 解析右括号
+            return failure();
+    } else {
+        return failure();
+    }
+
+    // 解析参数及结果
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
+        return failure();
+
+    return success();
+}
+
+static ParseResult parseScalarOrVectorStoreOp(OpAsmParser &parser, OperationState &state)
+{
+    // 解析参数列表
+    SmallVector<OpAsmParser::OperandType, 8> operands;
+    SmallVector<Type, 8> operandTypes;
+    OpAsmParser::OperandType currentOperand;
+    Type currentType;
+    
+    do {
+        if (failed(parser.parseOperand(currentOperand)))
+            return failure();
+
+        operands.push_back(currentOperand);
+    } while (succeeded(parser.parseOptionalComma())); // 解析逗号
+
+    // 解析偏移量
+    if (succeeded(parser.parseLSquare())) { // 解析左括号
+        do {
+            if (failed(parser.parseOperand(currentOperand)))
+                return failure();
+            operands.push_back(currentOperand);
+        } while(succeeded(parser.parseOptionalComma())); // 解析可能存在的逗号
+
+        if (failed(parser.parseRSquare())) // 解析右括号
+            return failure();
+    } else {
+        return failure();
+    }
+    
+    // 解析参数类型
+    // 解析元素类型
+    if (failed(parser.parseColonType(currentType)))
+        return failure();
+    operandTypes.push_back(currentType);
+
+    if (failed(parser.parseOptionalKeyword("to")))
+        return failure();
+    if (succeeded(parser.parseLParen())) { // 解析左括号
+        // 解析矩阵类型
+        if (failed(parser.parseType(currentType)))
+            return failure();
+        operandTypes.push_back(currentType);
+
+        // 解析偏移量类型
+        if (failed(parser.parseComma())
+            || failed(parser.parseType(currentType)))
+            return failure();
+        for (int iter = 0; iter < operands.size()-2; iter++)
+            operandTypes.push_back(currentType);
+
+        if (failed(parser.parseRParen())) // 解析右括号
+            return failure();
+    } else {
+        return failure();
+    }
+
+    // 解析参数及其类型并添加到state中
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
+        return failure();
+    
+    return success();
+}
+
 // 输出数组形式的Attributes
 static void printAttributions(OpAsmPrinter &printer, ArrayRef<BlockArgument> values)
 {
@@ -253,6 +382,7 @@ static void print(sw::ModuleOp moduleOp, OpAsmPrinter &printer)
     printer << "#include <math.h>\n";
     printer << "#include <string.h>\n";
     printer << "#include <stdint.h>\n";
+    printer << "#include <simd.h>\n";
     printer << "#include \"utils/dma_lib.h\"\n\n";
     
     // 输出域
@@ -964,66 +1094,67 @@ static void print(sw::LoadOp loadOp, OpAsmPrinter &printer)
 // 解析函数
 static ParseResult parseStoreOp(OpAsmParser &parser, OperationState &state)
 {
-    // 解析参数列表
-    SmallVector<OpAsmParser::OperandType, 8> operands;
-    SmallVector<Type, 8> operandTypes;
-    OpAsmParser::OperandType currentOperand;
-    Type currentType;
+    return parseScalarOrVectorStoreOp(parser, state);
+    // // 解析参数列表
+    // SmallVector<OpAsmParser::OperandType, 8> operands;
+    // SmallVector<Type, 8> operandTypes;
+    // OpAsmParser::OperandType currentOperand;
+    // Type currentType;
     
-    do {
-        if (failed(parser.parseOperand(currentOperand)))
-            return failure();
+    // do {
+    //     if (failed(parser.parseOperand(currentOperand)))
+    //         return failure();
 
-        operands.push_back(currentOperand);
-    } while (succeeded(parser.parseOptionalComma())); // 解析逗号
+    //     operands.push_back(currentOperand);
+    // } while (succeeded(parser.parseOptionalComma())); // 解析逗号
 
-    // 解析偏移量
-    if (succeeded(parser.parseLSquare())) { // 解析左括号
-        do {
-            if (failed(parser.parseOperand(currentOperand)))
-                return failure();
-            operands.push_back(currentOperand);
-        } while(succeeded(parser.parseOptionalComma())); // 解析可能存在的逗号
+    // // 解析偏移量
+    // if (succeeded(parser.parseLSquare())) { // 解析左括号
+    //     do {
+    //         if (failed(parser.parseOperand(currentOperand)))
+    //             return failure();
+    //         operands.push_back(currentOperand);
+    //     } while(succeeded(parser.parseOptionalComma())); // 解析可能存在的逗号
 
-        if (failed(parser.parseRSquare())) // 解析右括号
-            return failure();
-    } else {
-        return failure();
-    }
+    //     if (failed(parser.parseRSquare())) // 解析右括号
+    //         return failure();
+    // } else {
+    //     return failure();
+    // }
     
-    // 解析参数类型
-    // 解析元素类型
-    if (failed(parser.parseColonType(currentType)))
-        return failure();
-    operandTypes.push_back(currentType);\
+    // // 解析参数类型
+    // // 解析元素类型
+    // if (failed(parser.parseColonType(currentType)))
+    //     return failure();
+    // operandTypes.push_back(currentType);\
 
-    if (failed(parser.parseOptionalKeyword("to")))
-        return failure();
-    if (succeeded(parser.parseLParen())) { // 解析左括号
-        // 解析矩阵类型
-        if (failed(parser.parseType(currentType)))
-            return failure();
-        operandTypes.push_back(currentType);
+    // if (failed(parser.parseOptionalKeyword("to")))
+    //     return failure();
+    // if (succeeded(parser.parseLParen())) { // 解析左括号
+    //     // 解析矩阵类型
+    //     if (failed(parser.parseType(currentType)))
+    //         return failure();
+    //     operandTypes.push_back(currentType);
 
-        // 解析偏移量类型
-        if (failed(parser.parseComma())
-            || failed(parser.parseType(currentType)))
-            return failure();
-        for (int iter = 0; iter < operands.size()-2; iter++)
-            operandTypes.push_back(currentType);
+    //     // 解析偏移量类型
+    //     if (failed(parser.parseComma())
+    //         || failed(parser.parseType(currentType)))
+    //         return failure();
+    //     for (int iter = 0; iter < operands.size()-2; iter++)
+    //         operandTypes.push_back(currentType);
 
-        if (failed(parser.parseRParen())) // 解析右括号
-            return failure();
-    } else {
-        return failure();
-    }
+    //     if (failed(parser.parseRParen())) // 解析右括号
+    //         return failure();
+    // } else {
+    //     return failure();
+    // }
 
-    // 解析参数及其类型并添加到state中
-    auto loc = parser.getCurrentLocation();
-    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
-        return failure();
+    // // 解析参数及其类型并添加到state中
+    // auto loc = parser.getCurrentLocation();
+    // if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
+    //     return failure();
     
-    return success();
+    // return success();
 }
 
 // 输出函数
@@ -1076,6 +1207,15 @@ static void print(sw::ConstantOp constantOp, OpAsmPrinter &printer)
         } else {
             printer << constantOp.value().cast<FloatAttr>().getValue().convertToFloat() << ";";
             printer << "$moveToHead<-float";
+        }
+    } else if (elemType.isa<VectorType>()) {
+        auto value = *(constantOp.value().cast<DenseFPElementsAttr>().begin());
+        if (elemType.cast<VectorType>().getElementTypeBitWidth() == 64) {
+            printer << value.convertToDouble() << ";";
+            printer << "$moveToHead<-doublev4";
+        } else {
+            printer << value.convertToFloat() << ";";
+            printer << "$moveToHead<-floatv4";
         }
     } else {
         printer << "$error";
@@ -1134,10 +1274,19 @@ static void print(sw::AddfOp addfOp, OpAsmPrinter &printer)
     printer << addfOp.lhs() << " + " << addfOp.rhs() << ";";
 
     // 输出结果类型
-    if (addfOp.res().getType().cast<mlir::FloatType>().getWidth() == 64)
-        printer << "$moveToHead<-double";
-    else
-        printer << "$moveToHead<-float";
+    auto resType = addfOp.res().getType();
+    if (resType.isa<VectorType>()) {
+        auto elementTypeWidth = resType.cast<VectorType>().getElementTypeBitWidth();
+        if (elementTypeWidth == 64) 
+            printer << "$moveToHead<-doublev4";
+        else
+            printer << "$moveToHead<-floatv4";
+    } else {
+        if (resType.cast<mlir::FloatType>().getWidth() == 64)
+            printer << "$moveToHead<-double";
+        else
+            printer << "$moveToHead<-float";
+    }
 }
 
 // fold函数
@@ -1163,10 +1312,19 @@ static void print(sw::SubfOp subfOp, OpAsmPrinter &printer)
     printer << subfOp.lhs() << " - " << subfOp.rhs() << ";";
 
     // 输出结果类型
-    if (subfOp.res().getType().cast<mlir::FloatType>().getWidth() == 64)
-        printer << "$moveToHead<-double";
-    else
-        printer << "$moveToHead<-float";
+    auto resType = subfOp.res().getType();
+    if (resType.isa<VectorType>()) {
+        auto elementTypeWidth = resType.cast<VectorType>().getElementTypeBitWidth();
+        if (elementTypeWidth == 64) 
+            printer << "$moveToHead<-doublev4";
+        else
+            printer << "$moveToHead<-floatv4";
+    } else {
+        if (resType.cast<mlir::FloatType>().getWidth() == 64)
+            printer << "$moveToHead<-double";
+        else
+            printer << "$moveToHead<-float";
+    }
 }
 
 // fold函数
@@ -1192,10 +1350,19 @@ static void print(sw::MulfOp mulfOp, OpAsmPrinter &printer)
     printer << mulfOp.lhs() << " * " << mulfOp.rhs() << ";";
 
     // 输出结果类型
-    if (mulfOp.res().getType().cast<mlir::FloatType>().getWidth() == 64)
-        printer << "$moveToHead<-double";
-    else
-        printer << "$moveToHead<-float";
+    auto resType = mulfOp.res().getType();
+    if (resType.isa<VectorType>()) {
+        auto elementTypeWidth = resType.cast<VectorType>().getElementTypeBitWidth();
+        if (elementTypeWidth == 64) 
+            printer << "$moveToHead<-doublev4";
+        else
+            printer << "$moveToHead<-floatv4";
+    } else {
+        if (resType.cast<mlir::FloatType>().getWidth() == 64)
+            printer << "$moveToHead<-double";
+        else
+            printer << "$moveToHead<-float";
+    }
 }
 
 // fold函数
@@ -1218,13 +1385,25 @@ static ParseResult parseDivfOp(OpAsmParser &parser, OperationState &result)
 // 输出函数
 static void print(sw::DivfOp divfOp, OpAsmPrinter &printer)
 {
-    printer << divfOp.lhs() << " / " << divfOp.rhs() << ";";
 
     // 输出结果类型
-    if (divfOp.res().getType().cast<mlir::FloatType>().getWidth() == 64)
-        printer << "$moveToHead<-double";
-    else
-        printer << "$moveToHead<-float";
+    auto resType = divfOp.res().getType();
+    if (resType.isa<VectorType>()) {
+        auto elementTypeWidth = resType.cast<VectorType>().getElementTypeBitWidth();
+        if (elementTypeWidth == 64) {
+            printer << "simd_vdivd(" << divfOp.lhs() << ", " << divfOp.rhs() << ");";
+            printer << "$moveToHead<-doublev4";
+        } else {
+            printer << "simd_vdivs(" << divfOp.lhs() << ", " << divfOp.rhs() << ");";
+            printer << "$moveToHead<-floatv4";
+        }
+    } else {
+        printer << divfOp.lhs() << " / " << divfOp.rhs() << ";";
+        if (resType.cast<mlir::FloatType>().getWidth() == 64)
+            printer << "$moveToHead<-double";
+        else
+            printer << "$moveToHead<-float";
+    }
 }
 
 //============================================================================//
@@ -1420,6 +1599,120 @@ static void print(sw::MemcpyToMEMOp memcpyToMEMOp, OpAsmPrinter &printer)
     printer << memcpyToMEMOp.cnt() << TypeWidth << ", ";
     printer << memcpyToMEMOp.stride() << TypeWidth <<", ";
     printer << memcpyToMEMOp.bsize() << TypeWidth << ");";
+}
+
+//============================================================================//
+// vectorLoadU操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseVectorLoadUOp(OpAsmParser &parser, OperationState &state)
+{
+    return parseVectorLoadOpCommon(parser, state);
+}
+
+// 打印函数
+static void print(sw::VectorLoadUOp vectorLoadUOp, OpAsmPrinter &printer)
+{
+    SmallVector<Value, 10> operands = vectorLoadUOp.getOperands();
+    printer << "simd_loadu(" << operands[0] << ", &" << operands[1];
+    for (int iter = 0; iter < vectorLoadUOp.pos().size(); iter++)
+        printer << "[" << vectorLoadUOp.pos()[iter] << "]";
+    printer << ");";
+
+}
+
+//============================================================================//
+// vectorStoreU操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseVectorStoreUOp(OpAsmParser &parser, OperationState &state)
+{   
+    return parseScalarOrVectorStoreOp(parser, state);
+}
+
+// 打印函数
+static void print(sw::VectorStoreUOp vectorStoreUOp, OpAsmPrinter &printer)
+{
+    SmallVector<Value, 10> operands = vectorStoreUOp.getOperands();
+    printer << "simd_storeu(" << operands[0] << ", &" << operands[1];
+    for (int iter = 0; iter < vectorStoreUOp.pos().size(); iter++)
+        printer << "[" << vectorStoreUOp.pos()[iter] << "]";
+    printer << ");";
+}
+
+//============================================================================//
+// vectorLoad操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseVectorLoadOp(OpAsmParser &parser, OperationState &state)
+{
+    return parseVectorLoadOpCommon(parser, state);
+}
+
+// 打印函数
+static void print(sw::VectorLoadOp vectorLoadOp, OpAsmPrinter &printer)
+{
+    SmallVector<Value, 10> operands = vectorLoadOp.getOperands();
+    printer << "simd_load(" << operands[0] << ", &" << operands[1];
+    for (int iter = 0; iter < vectorLoadOp.pos().size(); iter++)
+        printer << "[" << vectorLoadOp.pos()[iter] << "]";
+    printer << ");";
+}
+
+//============================================================================//
+// vectorBroadCast操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseVectorBroadCastOp(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 8> operands;
+    SmallVector<Type, 8> operandTypes;
+    SmallVector<Type, 8> resultTypes;
+    OpAsmParser::OperandType currentOperand;
+    Type currentType;
+
+    // 解析参数
+    if (failed(parser.parseOperand(currentOperand)))
+        return failure();
+    operands.push_back(currentOperand);
+
+    // 解析参数类型
+    // 解析冒号
+    if (failed(parser.parseColon()))
+        return failure();
+    if (succeeded(parser.parseLParen())) { // 解析左括号
+        // 解析矩阵的类型
+        if (failed(parser.parseType(currentType)))
+            return failure();
+        operandTypes.push_back(currentType);
+
+        if (failed(parser.parseRParen())) // 解析右括号
+            return failure();
+    }
+
+    // 解析结果类型
+    if (failed(parser.parseArrowTypeList(resultTypes)))
+        return failure();
+    
+    // 解析参数及结果
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands))
+        || failed(parser.addTypesToList(resultTypes, state.types)))
+        return failure();
+
+    return success();
+}
+
+// 打印函数
+static void print(sw::VectorBroadCastOp vectorBroadCastOp, OpAsmPrinter &printer)
+{
+    printer << vectorBroadCastOp.input() << ";";
+    
+    auto type = vectorBroadCastOp.res().getType().cast<mlir::VectorType>().getElementType();
+    if (type.cast<mlir::FloatType>().getWidth() == 64)
+        printer << "$moveToHead<-doublev4";
+    else
+        printer << "$moveToHead<-floatv4";
 }
 
 //============================================================================//

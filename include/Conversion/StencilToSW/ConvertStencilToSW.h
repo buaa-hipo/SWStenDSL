@@ -22,7 +22,7 @@
 namespace mlir {
 namespace stencil {
 //============================================================================//
-// 将stencil类型转化为sw类型
+// 将stencil类型转化为sw类型`
 //============================================================================//
 struct StencilTypeConverter : public TypeConverter {
     using TypeConverter::TypeConverter;
@@ -44,6 +44,7 @@ public:
     StencilToSWPattern(StringRef rootOpName, StencilTypeConverter &typeConverter,
                         DenseMap<Value, Index> &valueToLB,
                         DenseMap<Value, OpOperand *> &valueToOperand,
+                        DenseMap<Value, unsigned int> &valueToApplyOpIndex,
                         PatternBenefit benefit = 1);
     
     // 返回嵌套循环的循环变量
@@ -70,6 +71,9 @@ protected:
 
     // 传递给return操作的结果集合
     DenseMap<Value, OpOperand *> &valueToOperand;
+
+    // 原程序apply 的参数及其位置映射
+    DenseMap<Value, unsigned int> &valueToApplyOpIndex;
 };
 
 //============================================================================//
@@ -81,15 +85,17 @@ public:
     StencilOpToSWPattern(StencilTypeConverter &typeConverter,
                             DenseMap<Value, Index> &valueToLB,
                             DenseMap<Value, OpOperand *> &valueToOperand,
+                            DenseMap<Value, unsigned int> &valueToApplyOpIndex,
                             PatternBenefit benefit = 1)
         : StencilToSWPattern(OpTy::getOperationName(), typeConverter, valueToLB,
-                                valueToOperand, benefit) {}
+                                valueToOperand, valueToApplyOpIndex, benefit) {}
 };
 
 // 填充conversion模式列表的辅助函数
 void populateStencilToSWConversionPatterns(
     StencilTypeConverter &typeConverter, DenseMap<Value, Index> &valueToLB,
     DenseMap<Value, OpOperand *> &valueToOperand,
+    DenseMap<Value, unsigned int> &valueToApplyOpIndex,
     OwningRewritePatternList &patterns);
 } // end of namespace stencil
 } // end of namespace mlir

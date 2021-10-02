@@ -236,7 +236,7 @@ def Stencil_StoreOp : Stencil_Op<"store", []> {
         The store operation stores an operand value or nothing.
     }];
     // 传入参数
-    let arguments = (ins Variadic<Stencil_Element>:$operands);
+    let arguments = (ins Variadic<AnyType>:$operands);
     // 返回值
     let results = (outs Stencil_Result:$res);
     // IR表示形式
@@ -260,8 +260,13 @@ def Stencil_StoreOp : Stencil_Op<"store", []> {
             return emitOpError("expected at most one operand");
         // 检查返回值类型
         auto resultType = res().getType().cast<stencil::ResultType>().getResultType();
-        if (operands().size() == 1 && operands()[0].getType() != resultType)
-            return emitOpError("operand type and result type are inconsistent");
+        auto operandsType = operands()[0].getType();
+        auto elementType = operandsType;
+        if (operandsType.isa<VectorType>()) {
+            elementType = operandsType.cast<VectorType>().getElementType();
+        }
+        if (operands().size() == 1 && elementType != resultType)
+            return emitOpError("operand type and result element type are inconsistent");
         
         // 检查结果绑定
         if (!getReturnOpOperand())
@@ -330,7 +335,12 @@ def Stencil_ReturnOp : Stencil_Op<"return", [
         for (unsigned int i = 0; i < resultSize; i++) {
             auto fieldType = applyOp.getResult(i).getType().cast<GridType>();
             for (unsigned int j = 0; j < unrollFactor; j++) {
-                if (getOperand(i*unrollFactor + j).getType().cast<stencil::ResultType>().getResultType() != fieldType.getElementType())
+                auto operandResultType = getOperand(i*unrollFactor + j).getType().cast<stencil::ResultType>().getResultType();
+                Type elementType = operandResultType;
+                if (operandResultType.isa<VectorType>()) {
+                    elementType = operandResultType.cast<VectorType>().getElementType();
+                }
+                if (elementType != fieldType.getElementType())
                     return emitOpError("the operand and apply result element types do not match");
             }
         }
@@ -504,4 +514,55 @@ def Stencil_IterationOp : Stencil_Op<"iteration"> {
         }
     }];
 }
+
+//============================================================================//
+// castToMemRef 操作, 该操作仅在进行向量化时用于将field类型转换为memref类型,从而符合向量化
+// 方言中一些op的接口规范
+//============================================================================//
+def Stencil_CastToMemRefOp : Stencil_Op<"castToMemRef", [
+    DeclareOpInterfaceMethods<OffsetOp>
+    ]> {
+    let summary = "castToMemRef op, cast field type to memref type";
+    let description = [{
+        This operation cast field type to memref type.
+    }];
+
+    // 传入参数
+    let arguments = (ins Stencil_Field:$field, Stencil_Index:$offset);
+    // 返回值
+    let results = (outs AnyMemRef:$res);
+    // IR 表示
+    let assemblyFormat = [{
+        $field $offset attr-dict-with-keyword `:` functional-type($field, $res)
+    }];
+    
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "Value field, ArrayRef<int64_t> offset, int64_t vectorWidth", [{
+            state.addOperands(field);
+            state.addAttribute(getOffsetAttrName(), builder.getI64ArrayAttr(offset));
+            auto fieldType = field.getType().cast<stencil::GridType>();
+            state.addTypes(MemRefType::get(vectorWidth, fieldType.getElementType()));
+        }]>
+    ];
+
+    // 有效性检查
+    let verifier = [{
+        auto fieldType = field().getType().cast<stencil::GridType>();
+        // 偏移量维度与域的维度必须相同
+        if (offset().size() != fieldType.getRank())
+            return emitOpError("offset and field dimensions do not match");
+        // 返回值的类型必须与域中元素类型相同
+        if (res().getType().cast<MemRefType>().getElementType() != fieldType.getElementType())
+            return emitOpError("result type and element type do not match");
+        return success();
+    }];
+
+    // 辅助函数
+    let extraClassDeclaration = [{
+        static StringRef getOffsetAttrName() { return "offset"; }
+    }];
+}
+
 #endif // end of _DIALECT_STENCIL_STENCIL_OPS_TD_
