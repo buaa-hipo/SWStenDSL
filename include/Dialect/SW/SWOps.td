@@ -438,16 +438,17 @@ def SW_ForOp : SW_Op<"for", [
 }
 
 //============================================================================//
-// for操作终结符
+// for, if操作终结符
 //============================================================================//
 def SW_YieldOp : SW_Op<"yield", [
-    HasParent<"ForOp">,
+    ParentOneOf<["ForOp", "IfOp"]>,
     Terminator
     ]> {
     
-    let summary = "Terminator for ForOp";
+    let summary = "Terminator for ForOp, IfOp";
     let description = [{
         This op terminates the only block inside the only region of a `sw.for`.
+        or regions of a `sw.if`
     }];
 }
 
@@ -759,6 +760,80 @@ def SW_DivfOp : SW_Op<"divf", []> {
 }
 
 //============================================================================//
+// 与操作
+//============================================================================//
+def SW_LogicAndOp : SW_Op<"land", []> {
+    let summary = "logical and operation";
+    let description = [{
+        The `land` operantion takes two operands and return one result, each of
+        these is required to be integer type.
+    }];
+
+    // 传入参数
+    let arguments = (ins I32:$lhs, I32:$rhs);
+    // 返回值
+    let results = (outs I32:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "ValueRange operands", [{
+            state.addOperands(operands);
+            state.addTypes(builder.getI32Type());
+        }]>
+    ]; 
+}
+
+//============================================================================//
+// 或操作
+//============================================================================//
+def SW_LogicOrOp : SW_Op<"lor", []> {
+    let summary = "logical or operation";
+    let description = [{
+        The `lor` operantion takes two operands and return one result, each of
+        these is required to be integer type.
+    }];
+
+    // 传入参数
+    let arguments = (ins I32:$lhs, I32:$rhs);
+    // 返回值
+    let results = (outs I32:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "ValueRange operands", [{
+            state.addOperands(operands);
+            state.addTypes(builder.getI32Type());
+        }]>
+    ]; 
+}
+
+//============================================================================//
+// 非操作
+//============================================================================//
+def SW_LogicNotOp : SW_Op<"lnot", []> {
+    let summary = "logical not operation";
+    let description = [{
+        The `lnot` operantion takes one operands and return one result, each of
+        these is required to be integer type.
+    }];
+
+    // 传入参数
+    let arguments = (ins I32:$input);
+    // 返回值
+    let results = (outs I32:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "ValueRange operands", [{
+            state.addOperands(operands);
+            state.addTypes(builder.getI32Type());
+        }]>
+    ]; 
+}
+//============================================================================//
 // memcpyToLDM操作
 //============================================================================//
 def SW_MemcpyToLDMOp : SW_Op<"memcpyToLDM", []> {
@@ -1056,4 +1131,130 @@ def SW_MpiExchangeHaloOp : SW_Op<"mpiExchangeHalo", []> {
         static StringRef getMpiHaloUName() { return "mpiHaloU"; }
     }];
 }
+
+//============================================================================//
+// if-then-else op
+//============================================================================//
+def SW_IfOp : SW_Op<"if",
+    [SingleBlockImplicitTerminator<"YieldOp">,
+    RecursiveSideEffects]> {
+    let summary = "if-then-else operation";
+    let description = [{
+        The `sw.if` operation represents an if-then-else construct for
+        conditionally executing to regions of code. The operand to an if operation
+        is a boolean value.
+    }];
+
+    // 传入参数
+    let arguments = (ins I32:$condition);
+    let regions = (region SizedRegion<1>:$thenRegion, AnyRegion:$elseRegion);
+
+    // 构造函数
+    let skipDefaultBuilders = 1;
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "Value cond, bool withElseRegion", [{
+            auto addTerminator = [&](OpBuilder &nested, Location loc) {
+                IfOp::ensureTerminator(*nested.getInsertionBlock()->getParent(),
+                    nested, loc);
+            };
+
+            build(builder, state, cond, addTerminator, 
+                    withElseRegion ? addTerminator 
+                    : function_ref<void(OpBuilder &, Location)>());
+        }]>,
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "Value cond, "
+                    "function_ref<void(OpBuilder &, Location)> thenBuilder "
+                    " = buildIfOpTerminatedBody, "
+                    "function_ref<void(OpBuilder &, Location)> elseBuilder "
+                    " = nullptr", [{
+            assert(thenBuilder && "the builder callback for 'then' must be present");
+
+            state.addOperands(cond);
+            
+            OpBuilder::InsertionGuard guard(builder);
+            Region *thenRegion = state.addRegion();
+            builder.createBlock(thenRegion);
+            thenBuilder(builder, state.location);
+
+            Region *elseRegion = state.addRegion();
+            if (!elseBuilder)
+                return;
+            builder.createBlock(elseRegion);
+            elseBuilder(builder, state.location);
+        }]>
+    ];
+
+    // 辅助函数
+    let extraClassDeclaration = [{
+        OpBuilder getThenBodyBuilder() {
+            Block* body = getBody(0);
+            return OpBuilder::atBlockTerminator(body);
+        }
+        OpBuilder getElseBodyBuilder() {
+            Block* body = getBody(1);
+            return OpBuilder::atBlockTerminator(body);
+        }
+    }];
+}
+
+//============================================================================//
+// Cmp操作,用于浮点数比较
+//============================================================================//
+// 以下定义了数值比较提供的操作
+def SWCmp_EQ    : I64EnumAttrCase<"eq", 0>;     // 判断两个数相等
+def SWCmp_GT    : I64EnumAttrCase<"gt", 1>;     // 判断第一个数大于第二个数
+def SWCmp_GE    : I64EnumAttrCase<"ge", 2>;     // 判断第一个数大于等于第二个数
+def SWCmp_LT    : I64EnumAttrCase<"lt", 3>;     // 判断第一个数小于第二个数
+def SWCmp_LE    : I64EnumAttrCase<"le", 4>;     // 判断第一个数小于等于第二个数
+def SWCmp_NE    : I64EnumAttrCase<"ne", 5>;     // 判断两个数不相等
+
+def SWCmpPredictateAttr : I64EnumAttr<
+    "SWCmpPredicate", "",
+    [SWCmp_EQ, SWCmp_GT, SWCmp_GE, SWCmp_LT, SWCmp_LE, SWCmp_NE]> {
+    let cppNamespace = "mlir::sw";
+}
+
+def SW_CmpOp : SW_Op<"cmp" , [
+    NoSideEffect, 
+    ]> {
+    let summary = "comparison operation";
+    let description = [{
+        The `cmp` operation compares its two operands according to the float comparison.
+    }];
+
+    // 传入参数
+    let arguments = (ins SWCmpPredictateAttr:$predicate,
+        AnyType:$lhs,
+        AnyType:$rhs);
+    // 返回值
+    let results = (outs I32:$res);
+
+    // 构造函数
+    let builders = [
+        OpBuilder<"OpBuilder &builder, OperationState &state, "
+                    "mlir::sw::SWCmpPredicate predicate, Value lhs, Value rhs", [{
+            state.addOperands({lhs, rhs});
+            state.addAttribute(CmpOp::getPredicateAttrName(),
+                    builder.getI64IntegerAttr(static_cast<int64_t>(predicate)));
+            state.addTypes(builder.getI32Type());
+        }]>
+    ];
+
+    // 辅助函数
+    let extraClassDeclaration = [{
+        static StringRef getPredicateAttrName() { return "predicate"; }
+        static mlir::sw::SWCmpPredicate getPredicateByName(StringRef name) {
+            auto pred = symbolizeSWCmpPredicate(name);
+            assert(pred.hasValue() && "invalid predicate name");
+            return pred.getValue();
+        }
+        mlir::sw::SWCmpPredicate getPredicate() {
+            return (mlir::sw::SWCmpPredicate)getAttrOfType<IntegerAttr>(getPredicateAttrName()).getInt();
+        }
+    }];
+}
+
+
 #endif // end of _DIALECT_SW_SW_OPS_TD_

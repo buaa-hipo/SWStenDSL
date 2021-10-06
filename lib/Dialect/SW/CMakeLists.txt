@@ -7,6 +7,7 @@ add_mlir_dialect_library(SW
     ${PROJECT_SOURCE_DIR}/include/Dialect/SW
     
     DEPENDS
+    MLIRSWOpsEnumsIncGen
     MLIRSWOpsIncGen
     
     LINK_LIBS PUBLIC

@@ -173,7 +173,10 @@ public:
         this->location = loc;
         this->name = name;
         this->tile = tile;
-        this->swCacheAt = swCacheAt;
+        if (swCacheAt != -1)
+            this->swCacheAt = swCacheAt;
+        else
+            this->swCacheAt = tile.size() - 1;
         this->domainRange = domainRange;
         this->expr = std::move(expr);
     }

@@ -1095,66 +1095,6 @@ static void print(sw::LoadOp loadOp, OpAsmPrinter &printer)
 static ParseResult parseStoreOp(OpAsmParser &parser, OperationState &state)
 {
     return parseScalarOrVectorStoreOp(parser, state);
-    // // 解析参数列表
-    // SmallVector<OpAsmParser::OperandType, 8> operands;
-    // SmallVector<Type, 8> operandTypes;
-    // OpAsmParser::OperandType currentOperand;
-    // Type currentType;
-    
-    // do {
-    //     if (failed(parser.parseOperand(currentOperand)))
-    //         return failure();
-
-    //     operands.push_back(currentOperand);
-    // } while (succeeded(parser.parseOptionalComma())); // 解析逗号
-
-    // // 解析偏移量
-    // if (succeeded(parser.parseLSquare())) { // 解析左括号
-    //     do {
-    //         if (failed(parser.parseOperand(currentOperand)))
-    //             return failure();
-    //         operands.push_back(currentOperand);
-    //     } while(succeeded(parser.parseOptionalComma())); // 解析可能存在的逗号
-
-    //     if (failed(parser.parseRSquare())) // 解析右括号
-    //         return failure();
-    // } else {
-    //     return failure();
-    // }
-    
-    // // 解析参数类型
-    // // 解析元素类型
-    // if (failed(parser.parseColonType(currentType)))
-    //     return failure();
-    // operandTypes.push_back(currentType);\
-
-    // if (failed(parser.parseOptionalKeyword("to")))
-    //     return failure();
-    // if (succeeded(parser.parseLParen())) { // 解析左括号
-    //     // 解析矩阵类型
-    //     if (failed(parser.parseType(currentType)))
-    //         return failure();
-    //     operandTypes.push_back(currentType);
-
-    //     // 解析偏移量类型
-    //     if (failed(parser.parseComma())
-    //         || failed(parser.parseType(currentType)))
-    //         return failure();
-    //     for (int iter = 0; iter < operands.size()-2; iter++)
-    //         operandTypes.push_back(currentType);
-
-    //     if (failed(parser.parseRParen())) // 解析右括号
-    //         return failure();
-    // } else {
-    //     return failure();
-    // }
-
-    // // 解析参数及其类型并添加到state中
-    // auto loc = parser.getCurrentLocation();
-    // if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
-    //     return failure();
-    
-    // return success();
 }
 
 // 输出函数
@@ -1404,6 +1344,125 @@ static void print(sw::DivfOp divfOp, OpAsmPrinter &printer)
         else
             printer << "$moveToHead<-float";
     }
+}
+
+//============================================================================//
+// 与操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseLogicAndOp(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 2> operands;
+    SmallVector<Type, 2> operandTypes;
+    SmallVector<Type, 1> resultTypes;
+
+    // 解析参数
+    do {
+        OpAsmParser::OperandType currentOperand;
+
+        if (failed(parser.parseOperand(currentOperand)))
+            return failure();
+        operands.push_back(currentOperand);
+    } while (succeeded(parser.parseOptionalComma())); // 解析逗号
+
+    auto builder = parser.getBuilder();
+    Type i32Type = builder.getI32Type();
+    operandTypes.push_back(i32Type);
+    operandTypes.push_back(i32Type);
+    resultTypes.push_back(i32Type);
+
+    // 解析参数和结果类型到state中
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands))
+        || failed(parser.addTypesToList(resultTypes, state.types)))
+        return failure();
+
+    return success();
+}
+
+// 输出函数
+static void print(sw::LogicAndOp lAndOp, OpAsmPrinter &printer)
+{
+    printer << "(" <<lAndOp.lhs() << " && " << lAndOp.rhs() << ");";
+    printer << "$moveToHead<-int";
+}
+
+//============================================================================//
+// 或操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseLogicOrOp(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 2> operands;
+    SmallVector<Type, 2> operandTypes;
+    SmallVector<Type, 1> resultTypes;
+
+    // 解析参数
+    do {
+        OpAsmParser::OperandType currentOperand;
+
+        if (failed(parser.parseOperand(currentOperand)))
+            return failure();
+        operands.push_back(currentOperand);
+    } while (succeeded(parser.parseOptionalComma())); // 解析逗号
+
+    auto builder = parser.getBuilder();
+    Type i32Type = builder.getI32Type();
+    operandTypes.push_back(i32Type);
+    operandTypes.push_back(i32Type);
+    resultTypes.push_back(i32Type);
+
+    // 解析参数和结果类型到state中
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands))
+        || failed(parser.addTypesToList(resultTypes, state.types)))
+        return failure();
+
+    return success();
+}
+// 输出函数
+static void print(sw::LogicOrOp lOrOp, OpAsmPrinter &printer)
+{
+    printer << "(" << lOrOp.lhs() << " || " << lOrOp.rhs() << ");";
+    printer << "$moveToHead<-int";
+}
+
+//============================================================================//
+// 非操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseLogicNotOp(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 1> operands;
+    SmallVector<Type, 1> operandTypes;
+    SmallVector<Type, 1> resultTypes;
+
+    // 解析参数
+    OpAsmParser::OperandType currentOperand;
+
+    if (failed(parser.parseOperand(currentOperand)))
+        return failure();
+    operands.push_back(currentOperand);
+
+    auto builder = parser.getBuilder();
+    Type i32Type = builder.getI32Type();
+    operandTypes.push_back(i32Type);
+    resultTypes.push_back(i32Type);
+
+    // 解析参数和结果类型到state中
+    auto loc = parser.getCurrentLocation();
+    if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands))
+        || failed(parser.addTypesToList(resultTypes, state.types)))
+        return failure();
+
+    return success();
+}
+
+// 输出函数
+static void print(sw::LogicNotOp lNotOp, OpAsmPrinter &printer)
+{
+    printer << "(!" << lNotOp.input() << ");";
+    printer << "$moveToHead<-int";
 }
 
 //============================================================================//
@@ -1905,6 +1964,147 @@ static void print(sw::MpiExchangeHaloOp mpiExchangeHaloOp, OpAsmPrinter &printer
     printer << mpiExchangeHaloOp.rank() << ");";
 }
 
+//============================================================================//
+// if-then-else操作相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseIfOp(OpAsmParser &parser, OperationState &state)
+{
+    // 创建两个Region
+    state.regions.reserve(2);
+    Region *thenRegion = state.addRegion();
+    Region *elseRegion = state.addRegion();
+
+    auto builder = parser.getBuilder();
+    OpAsmParser::OperandType cond;
+    Type i32Type = builder.getIntegerType(32);
+    // 解析condition 部分
+    if (parser.parseOperand(cond) || 
+        parser.resolveOperand(cond, i32Type, state.operands))
+        return failure();
+    
+    // 解析then region部分
+    if (parser.parseRegion(*thenRegion, /*arguments=*/{}, /*argTypes=*/{}))
+        return failure();
+    sw::IfOp::ensureTerminator(*thenRegion,parser.getBuilder(), state.location);
+
+    // 如果找到else关键字, 则还需要解析else部分
+    if (!parser.parseOptionalKeyword("else")) {
+        if (parser.parseRegion(*elseRegion,/*arguments=*/{}, /*argTypes=*/{}))
+            return failure();
+        sw::IfOp::ensureTerminator(*elseRegion, parser.getBuilder(), state.location);
+    }
+    return success();
+}
+
+// 打印函数
+static void print(sw::IfOp ifOp, OpAsmPrinter &printer)
+{
+    printer <<  "if (" << ifOp.condition() <<")";
+    // 输出then部分
+    printer.printRegion(ifOp.thenRegion(), 
+                        /*printEntryBlockArgs=*/false,
+                        /*printBlockTerminators=*/false);
+    // 如果else存在, 则输出else部分
+    auto &elseRegion = ifOp.elseRegion();
+    if (!elseRegion.empty()) {
+        printer << " else";
+        printer.printRegion(elseRegion,
+                        /*printEntryBlockArgs=*/false,
+                        /*printBlockTerminators=*/false);
+    }
+}
+
+// 创建空的if-then域
+static void buildIfOpTerminatedBody(OpBuilder &builder, Location loc) {
+    builder.create<sw::YieldOp>(loc);
+}
+
+//============================================================================//
+// SWCmp相关函数
+//============================================================================//
+// 解析函数
+static ParseResult parseCmpOp(OpAsmParser &parser, OperationState &state)
+{
+    SmallVector<OpAsmParser::OperandType, 2> operands;
+    SmallVector<Type, 2> operandsTypes;
+    OpAsmParser::OperandType currentOperand;
+    Type currentOperandType;
+
+    auto loc = parser.getCurrentLocation();
+    Builder &builder = parser.getBuilder();
+
+    StringAttr attrVal;
+    NamedAttrList attrStorage;
+    IntegerAttr predicateAttr;
+    // 解析predicate部分
+    if (parser.parseAttribute(attrVal, sw::CmpOp::getPredicateAttrName(), attrStorage))
+        return failure();
+    auto attrOptional = mlir::sw::symbolizeSWCmpPredicate(attrVal.getValue());
+    if (!attrOptional)
+        return parser.emitError(loc, "invalid ")
+            << "predicate attribute specification: " << attrVal;
+    predicateAttr = builder.getI64IntegerAttr(static_cast<int64_t>(attrOptional.getValue()));
+    state.addAttribute(sw::CmpOp::getPredicateAttrName(), predicateAttr);
+
+    // 解析逗号
+    if (parser.parseComma())
+        return failure();
+
+    // 解析两个参数
+    if (parser.parseOperand(currentOperand))
+        return failure();
+    operands.push_back(currentOperand);
+    if (parser.parseComma())
+        return failure();
+    if (parser.parseOperand(currentOperand))
+        return failure();
+    operands.push_back(currentOperand);
+
+    // 解析冒号
+    if (parser.parseColon())
+        return failure();
+    // 解析参数类型
+    if (parser.parseType(currentOperandType))
+        return failure();
+
+    // 如果参数类型不是浮点数, 则报错
+    if (!currentOperandType.isa<mlir::FloatType>() && !currentOperandType.isa<mlir::IntegerType>())
+        return parser.emitError(parser.getNameLoc()) 
+            << "operands must be floating or integer number, but got " << operandsTypes[0];
+    operandsTypes.push_back(currentOperandType);
+    operandsTypes.push_back(currentOperandType);
+
+    // 解析参数类型并设置op结果类型
+    state.addTypes(builder.getI32Type());
+    if (parser.resolveOperands(operands, operandsTypes, loc, state.operands))
+        return failure();
+
+    return success();
+}
+
+// 打印函数
+static StringRef printCmpPredict(mlir::sw::SWCmpPredicate value)
+{
+    switch (value) {
+        case mlir::sw::SWCmpPredicate::eq: return "==";
+        case mlir::sw::SWCmpPredicate::gt: return ">";
+        case mlir::sw::SWCmpPredicate::ge: return ">=";
+        case mlir::sw::SWCmpPredicate::lt: return "<";
+        case mlir::sw::SWCmpPredicate::le: return "<=";
+        case mlir::sw::SWCmpPredicate::ne: return "!=";
+    }
+
+    return "";
+}
+static void print(sw::CmpOp cmpOp, OpAsmPrinter &printer)
+{
+    printer << "(" << cmpOp.lhs();
+    printer << " " << printCmpPredict(cmpOp.predicate()) << " ";
+    printer << cmpOp.rhs() << ");$moveToHead<-int";
+}
+
+#include "Dialect/SW/SWOpsEnums.cpp.inc"
 namespace mlir {
 namespace sw {
 #define GET_OP_CLASSES

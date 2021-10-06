@@ -25,6 +25,10 @@
 
 #include "Dialect/SW/SWTypes.h"
 
+using namespace mlir;
+static void buildIfOpTerminatedBody(OpBuilder &builder, Location loc);
+
+#include "Dialect/SW/SWOpsEnums.h.inc"
 namespace mlir {
 namespace sw {
 

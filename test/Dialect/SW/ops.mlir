@@ -40,6 +40,16 @@ module {
                         
                         sw.memcpyToMEM %cacheWrite1, %arg1 [%i, %j, %k] : z_dim(3) cnt(27) stride(0) bsize(0) : (!sw.memref<3x3x3xf64> , !sw.memref<3x3x3xf64>, i64)
                         
+                        %18 = sw.cmp "ne", %13, %14 : i64
+                        %19 = sw.cmp "eq", %13, %14 : i64
+                        %20 = sw.lor %18, %19
+                        sw.if %20 {
+                            %21 = sw.constant 2.0 : f64
+                            sw.yield
+                        } else {
+                            %22 = sw.constant 2.0 : f64
+                            sw.yield
+                        }
                         sw.yield
                     }
                     sw.yield
