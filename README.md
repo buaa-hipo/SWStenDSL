@@ -47,3 +47,50 @@ cd SWStenDSL/utils
 make
 ```
 The library will generated in current directory `SWsten/utils`, named `libswstenmpi.a`
+
+## How To Use
+
+### simple run
+
+After building all project, You can run the example program provided by SWStenDSL. There is a sample command.
+
+```bash
+cd SWStenDSL/build
+./bin/stenCC ../test/Examples/StencilDialect/laplaceAddInputIteration/laplaceAddInputIteration.dsl --emit=sw > laplaceAddInputIteration.sw 2>&1
+python3 ../tool/translate.py laplaceAddInputIteration.sw
+```
+
+After running those command, three C source file will be generated. We also provide driver program and build script in `${SWStenProject}/test/Examples/StencilDialect/laplaceAddInputIteration/`. 
+
+You need create a directory on Sunway Taihulight supercomputer, then copy three source file, driver program, buildscript and the `${SWStenDSL}/utils` into the directory you created.
+
+```bash
+cd <path_to_directory_you_created>
+make
+make run
+```
+
+Then, the executable program will be generated and be submited to Sunway TaihuLight supercomputer. 
+
+### MPI large-scale computing support
+
+If you need run large-scale stencil computing,  you need modify the dsl file and build script.
+
+In dsl file, you need add `mpiTile` and `mpiHalo` keyword. For more information please reference `${SWStenDSL}/doc/StencilDSL.md`.
+
+In build script, you need declare a marco `SWStenMPI`, the build script in `${SWStenDSL}/examples/2d9pt_box/makefileMPI` is an example.
+
+### enable optimization option
+
+Now, we provide two optimization options: `--kernel-fusion`, `--enable-vector=<vector-width>`.
+
+`kernel-fusion` will merge the kernels if one kernel depends on another kernel result. This option will  reduce the number of spe launching, and reduce the number of data transport bewteen main memory and LDM.
+
+`enable-vector`will enable vectorizable computation on spe. 
+
+There is a sample command.
+
+```
+./bin/stenCC --kernel-fusion --enable-vector=4 ../test/Examples/StencilDialect/laplaceAddInputIteration/laplaceAddInputIteration.dsl --emit=sw > laplaceAddInputIteration.sw 2>&1
+```
+

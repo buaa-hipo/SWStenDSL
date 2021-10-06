@@ -1,6 +1,24 @@
 # SWSten DSL
 
-## 1. Example
+## 1. keyword
+
+ 
+
+| keyword      | instructions                                                 |
+| ------------ | ------------------------------------------------------------ |
+| stencil      | stencil definition begins，followed by name and inputs       |
+| float/double | inputs Type                                                  |
+| iteration    | iteration number                                             |
+| operation    | Name for the kernel which will return the result to user     |
+| mpiHalo      | Halo region in mpi communicate                               |
+| mpiTile      | number of computing node in different dimension              |
+| kernel       | kernel define begins, followed by name                       |
+| tile         | data block size after tile                                   |
+| domain       | The range of computing                                       |
+| swCacheAt    | DMA position，0 is the outerest loop                         |
+| expr         | kernel computing expression, stencil inputs and kernel name can be used in expression. |
+
+## 2. Example
 
 ```
 stencil laplaceAddInputWithParamter(double U[72][18][16], c[5])
@@ -25,3 +43,4 @@ stencil laplaceAddInputWithParamter(double U[72][18][16], c[5])
 	}
 }
 ```
+

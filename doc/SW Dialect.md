@@ -311,4 +311,9 @@
           %22 = sw.constant 2.0 : f64
           sw.yield
   }
+  
+  sw.if %20 {
+  	%21 = sw.constant 2.0 : f64
+          sw.yield
+  }
   ```
