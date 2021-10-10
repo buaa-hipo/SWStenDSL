@@ -13,7 +13,7 @@ MPIExe: $(OBJ)
 	$(CC) -hybrid $(CFLAGS) -lswstenmpi -L$(LIBS) $^ -o $@
 
 %_slave.o: %_slave.c
-	sw5cc -slave $(CFLAGS) -I$(INCLUDE) -c $^ -o $@
+	sw5cc -slave $(CFLAGS) -I$(INCLUDE) -c $^ -msimd -o $@
 
 %.o: %.c
 	$(CC) -host -DSWStenMPI $(CFLAGS) -I$(INCLUDE) -c $^ -o $@

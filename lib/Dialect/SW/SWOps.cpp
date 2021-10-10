@@ -1802,7 +1802,7 @@ static void print(sw::AllocOp allocOp, OpAsmPrinter &printer)
     }
     auto shapeString = std::to_string(shapeSize);
 
-    printer << "malloc(sizeof(" << elemTypeString << ")*" << shapeString << ");";
+    printer << "calloc(" << shapeString << ", sizeof(" << elemTypeString << "));";
     printer << "$moveToHead<-" << elemTypeString << " *";
 }
 

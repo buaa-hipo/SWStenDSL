@@ -13,7 +13,7 @@ serialExe: $(OBJ)
 	$(CC) -hybrid $(CFLAGS) $^ -o $@
 
 %_slave.o: %_slave.c
-	$(CC) -slave $(CFLAGS) -I$(INCLUDE) -c $^ -o $@
+	$(CC) -slave $(CFLAGS) -I$(INCLUDE) -msimd -c $^ -o $@
 
 %.o: %.c
 	$(CC) -host $(CFLAGS) -c $^ -o $@
