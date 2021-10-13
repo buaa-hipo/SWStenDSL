@@ -6,18 +6,16 @@
 
 #include "utils/mpi_io.h"
 
-// 256*256*256, halo = 2
-#define DIM_2 256
-#define DIM_1 256
-#define DIM_0 256
-#define HALO 1
+// 4096*4096, halo = 4
+#define DIM_1 4096
+#define DIM_0 4096
+#define HALO 4
 
-#define M (DIM_2+2*HALO)
-#define N (DIM_1+2*HALO)
-#define Q (DIM_0+2*HALO)
+#define M (DIM_1+2*HALO)
+#define N (DIM_0+2*HALO)
 
-double input_spe[M][N][Q];
-double tmp_spe[M][N][Q];
+double input_spe[M][N];
+double tmp_spe[M][N];
 
 // 计时辅助函数
 struct timeval begin, end;
@@ -36,11 +34,11 @@ double tok()
     return elapsedTime;
 }
 
-void stencil_3d7pt9pt_nested_iteration(double value_arg0[M][N][Q], double value_arg1[M][N][Q]);
+void stencil_2d81pt_box_iteration(double value_arg0[M][N], double value_arg1[M][N]);
 
 int main(int argc, char *argv[])
 {
-    int i, j, k;
+    int i, j;
     MPI_Init(&argc, &argv);
     athread_init();
 
@@ -58,7 +56,7 @@ int main(int argc, char *argv[])
         tic();
         printf("computing...\n");
     }
-    stencil_3d7pt9pt_nested_iteration(input_spe, tmp_spe);
+    stencil_2d81pt_box_iteration(input_spe, tmp_spe);
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0) {
@@ -66,7 +64,7 @@ int main(int argc, char *argv[])
         printf("MPI elapsed Time: %lf (ms)\n", elapsedTime);
     }
 
-    swsten_store_data_to_file_double("matrix_result", input_spe, M*N*Q, Q);
+    swsten_store_data_to_file_double("matrix_result", input_spe, M*N, N);
 
     athread_halt();
     MPI_Finalize();

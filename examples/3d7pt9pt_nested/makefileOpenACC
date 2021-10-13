@@ -1,0 +1,16 @@
+CC = swacc
+CFLAGS = -O2
+
+SRC = $(wildcard *.openacc.c)
+
+.PHONY: clean run
+
+openACCExe: $(SRC)
+	$(CC) $(CFLAGS) $^ -o $@
+
+
+run:
+	bsub -I -b -q q_sw_expr -n 1 -cgsp 64 -share_size 2048 ./openACCExe
+
+clean:
+	rm -f *.o openACCExe

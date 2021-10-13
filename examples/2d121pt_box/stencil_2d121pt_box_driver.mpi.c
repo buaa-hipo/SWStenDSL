@@ -34,7 +34,7 @@ double tok()
     return elapsedTime;
 }
 
-void stencil_2d81pt_box_iteration(double value_arg0[M][N], double value_arg1[M][N]);
+void stencil_2d121pt_box_iteration(double value_arg0[M][N], double value_arg1[M][N]);
 
 int main(int argc, char *argv[])
 {
@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
         tic();
         printf("computing...\n");
     }
-    stencil_2d81pt_box_iteration(input_spe, tmp_spe);
+    stencil_2d121pt_box_iteration(input_spe, tmp_spe);
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0) {

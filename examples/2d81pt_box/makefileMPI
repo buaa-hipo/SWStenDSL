@@ -1,0 +1,25 @@
+CC = mpicc
+CFLAGS = -O2
+
+FILES = $(wildcard *.c)
+SRC = $(filter-out $(wildcard *.serial.c), $(FILES))
+OBJ = $(patsubst %.c, %.o, $(SRC))
+LIBS = ./utils
+INCLUDE = ./utils
+
+.PHONY: clean run
+
+MPIExe: $(OBJ)
+	$(CC) -hybrid $(CFLAGS) -lswstenmpi -L$(LIBS) $^ -o $@
+
+%_slave.o: %_slave.c
+	sw5cc -slave $(CFLAGS) -I$(INCLUDE) -msimd -c $^ -o $@
+
+%.o: %.c
+	$(CC) -host -DSWStenMPI $(CFLAGS) -I$(INCLUDE) -c $^ -o $@
+
+run:
+	bsub -I -b -q q_sw_share -n 128 -cgsp 64 -share_size 2048 ./MPIExe
+
+clean:
+	rm -f *.o MPIExe

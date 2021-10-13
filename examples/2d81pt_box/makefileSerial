@@ -1,0 +1,25 @@
+CC = sw5cc
+CFLAGS = -O2
+
+FILES = $(wildcard *.c)
+SRC = $(filter-out $(wildcard *.mpi.c), $(FILES))
+OBJ = $(patsubst %.c, %.o, $(SRC))
+LIBS = ./utils
+INCLUDE = ./utils
+
+.PHONY: clean run
+
+serialExe: $(OBJ)
+	$(CC) -hybrid $(CFLAGS) $^ -o $@
+
+%_slave.o: %_slave.c
+	$(CC) -slave $(CFLAGS) -I$(INCLUDE) -msimd -c $^ -o $@
+
+%.o: %.c
+	$(CC) -host $(CFLAGS) -c $^ -o $@
+
+run:
+	bsub -I -b -q q_sw_expr -n 1 -cgsp 64 -share_size 2048 ./serialExe
+
+clean:
+	rm -f *.o serialExe
