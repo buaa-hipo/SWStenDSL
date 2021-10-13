@@ -83,6 +83,7 @@ for tick in ax.get_xticklabels():
     tick.set_rotation(20)
 
 for i in range(len(lala)):
+    ax.text(lala[i]-offset[1], openacc_speedup[i], '%.2fs' % (openacc_times[i]/iterations/1000), ha='center', va='bottom', fontsize=6)
     ax.text(lala[i]-offset[0], athread_speedup[i], '%.2fx' % athread_speedup[i], ha='center', va='bottom', fontsize=6)
     if (msc_speedup[i] != 0):
         ax.text(lala[i]+offset[0], msc_speedup[i]+0.1, '%.2fx' % msc_speedup[i], ha='center', va='bottom', fontsize=6)
