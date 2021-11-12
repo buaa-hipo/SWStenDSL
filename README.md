@@ -36,7 +36,7 @@ git clone https://github.com/JackMoriarty/SWStenDSL.git
 cd SWStenDSL
 export LLVM_INSTALL=<path_to_llvm_install>
 export LLVM_BUILD=<path_to_llvm_build_directory>
-make build && cd build
+mkdir build && cd build
 cmake -G Ninja .. -DMLIR_DIR=$LLVM_INSTALL/lib/cmake/mlir -DLLVM_EXTERNAL_LIT=$LLVM_BUILD/bin/llvm-lit
 cmake --build . --target stenCC
 ```

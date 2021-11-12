@@ -16,8 +16,8 @@
 #define N (DIM_1+2*HALO)
 #define Q (DIM_0+2*HALO)
 
-double input_spe[M][N][Q];
-double tmp_spe[M][N][Q];
+double (*input_spe)[N][Q];
+double (*tmp_spe)[N][Q];
 
 // 计时辅助函数
 struct timeval begin, end;
@@ -41,6 +41,8 @@ void stencil_3d27pt_box_iteration(double value_arg0[M][N][Q], double value_arg1[
 int main(int argc, char *argv[])
 {
     int i, j, k;
+    input_spe = (double (*)[N][Q])malloc(sizeof(double)*M*N*Q);
+    tmp_spe = (double (*)[N][Q])malloc(sizeof(double)*M*N*Q);
     MPI_Init(&argc, &argv);
     athread_init();
 
@@ -70,5 +72,7 @@ int main(int argc, char *argv[])
 
     athread_halt();
     MPI_Finalize();
+    free(input_spe);
+    free(tmp_spe);
     exit(EXIT_SUCCESS);
 }
