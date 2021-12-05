@@ -35,18 +35,18 @@ def ShapeOp : OpInterface<"ShapeOp"> {
                 SmallVector<Attribute, kIndexSize> lbAttr;
                 size_t lbSize = lb.size();
                 for (size_t i = 0; i < lbSize; i++) {
-                    lbAttr.push_back(IntegerAttr::get(IntegerType::get(64, $_op.getContext()), lb[i]));
+                    lbAttr.push_back(IntegerAttr::get(IntegerType::get($_op.getContext(), 64), lb[i]));
                 }
-                $_op.lbAttr(ArrayAttr::get(lbAttr, $_op.getContext()));
+                $_op.lbAttr(ArrayAttr::get($_op.getContext(), lbAttr));
             }]>,
         InterfaceMethod<"/* Set the upper bound of the operation */",
             "void", "setUB", (ins "ArrayRef<int64_t>":$ub), [{
                 SmallVector<Attribute, kIndexSize> ubAttr;
                 size_t upSize = ub.size();
                 for (size_t i = 0; i < upSize; i++) {
-                    ubAttr.push_back(IntegerAttr::get(IntegerType::get(64, $_op.getContext()), ub[i]));
+                    ubAttr.push_back(IntegerAttr::get(IntegerType::get($_op.getContext(), 64), ub[i]));
                 }
-                $_op.ubAttr(ArrayAttr::get(ubAttr, $_op.getContext()));
+                $_op.ubAttr(ArrayAttr::get($_op.getContext(), ubAttr));
             }]>,
         InterfaceMethod<"/* Get the rank of the operation */",
             "int64_t", "getRank", (ins), [{
@@ -88,11 +88,12 @@ def ShiftOp : OpInterface<"ShiftOp"> {
         SmallVector<Attribute, kIndexSize> offsetAttr;
         for (auto elem : llvm::zip(offset, $_op.offset())) {
           offsetAttr.push_back(IntegerAttr::get(
-              IntegerType::get(64, $_op.getContext()),
+              IntegerType::get($_op.getContext(), 64),
               std::get<1>(elem).template cast<IntegerAttr>().getValue().getSExtValue() + 
               std::get<0>(elem)));
         }
-        $_op.offsetAttr(ArrayAttr::get(offsetAttr, $_op.getContext()));
+        $_op.offsetAttr(ArrayAttr::get($_op.getContext(), offsetAttr));
+
     }]>,
   ];
 }

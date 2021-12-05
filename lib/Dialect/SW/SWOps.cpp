@@ -24,7 +24,7 @@
 #include <mlir/Support/LogicalResult.h>
 #include <mlir/Dialect/CommonFolders.h>
 #include <mlir/IR/Matchers.h>
-#include <mlir/IR/Function.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/FunctionImplementation.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
@@ -93,7 +93,7 @@ static ParseResult parseMathOp(OpAsmParser &parser, OperationState &state)
     if (failed(parser.parseColonType(currentType)))
         return failure();
     // 设定参数的类型到operandTypes中
-    for (int i = 0; i < operands.size(); i++)
+    for (unsigned i = 0; i < operands.size(); i++)
         operandTypes.push_back(currentType);
     // 设定结果的类型到resultTypes中
     resultTypes.push_back(currentType);
@@ -180,7 +180,7 @@ static ParseResult parseMemcpyOp(OpAsmParser &parser, OperationState &state)
         } while (succeeded(parser.parseOptionalComma())); // 解析逗号
 
         // 现在已经将所有类型添加到operandTypes中了, 但是由于偏移量有多维, 还需补充剩余的维数
-        for (int iter = 0; iter < operands.size()-3; iter++)
+        for (unsigned iter = 0; iter < operands.size()-3; iter++)
             operandTypes.push_back(currentType);
         
         if (failed(parser.parseRParen())) // 解析右括号
@@ -243,7 +243,7 @@ static ParseResult parseVectorLoadOpCommon(OpAsmParser &parser, OperationState &
         if (failed(parser.parseComma())
             || failed(parser.parseType(currentType)))
             return failure();
-        for (int iter = 0; iter < operands.size()-2; iter++)
+        for (unsigned iter = 0; iter < operands.size()-2; iter++)
             operandTypes.push_back(currentType);
 
         if (failed(parser.parseRParen())) // 解析右括号
@@ -307,7 +307,7 @@ static ParseResult parseScalarOrVectorStoreOp(OpAsmParser &parser, OperationStat
         if (failed(parser.parseComma())
             || failed(parser.parseType(currentType)))
             return failure();
-        for (int iter = 0; iter < operands.size()-2; iter++)
+        for (unsigned iter = 0; iter < operands.size()-2; iter++)
             operandTypes.push_back(currentType);
 
         if (failed(parser.parseRParen())) // 解析右括号
@@ -356,7 +356,7 @@ static ParseResult parseModuleOp(OpAsmParser &parser, OperationState &state)
     SmallVector<OpAsmParser::OperandType, 8> entryArgs;
     SmallVector<Type, 8> argTypes;
 
-    Builder &builder = parser.getBuilder();
+    //Builder &builder = parser.getBuilder();
 
     // 解析module名称
     if (parser.parseSymbolName(nameAttr, SymbolTable::getSymbolAttrName(), 
@@ -429,7 +429,7 @@ static ParseResult parseFuncOp(OpAsmParser &parser, OperationState &state)
 
     bool isVariadic;
     auto signatureLocation = parser.getCurrentLocation();
-    if (failed(impl::parseFunctionSignature(parser, /*allowVariadic=*/false, 
+    if (failed(function_like_impl::parseFunctionSignature(parser, /*allowVariadic=*/false, 
         entryArgs, argTypes, argAttrs, isVariadic, resultTypes, resultAttrs)))
         return failure();
     if (entryArgs.empty() && !argTypes.empty())
@@ -466,7 +466,7 @@ static void print(sw::FuncOp funcOp, OpAsmPrinter &printer)
     printer << "$shareBegin\n";
     printer << "struct " << funcOp.getName() << "_arg {\n";
     int struct_arg_counter = 0;
-    for (int iter = 0; iter < argTypes.size(); iter++) {
+    for (unsigned iter = 0; iter < argTypes.size(); iter++) {
         printer << "\t";
         auto elemType = argTypes[iter].cast<mlir::sw::GridType>().getElementType();
         if (elemType.cast<mlir::FloatType>().getWidth() == 64)
@@ -490,7 +490,7 @@ static void print(sw::FuncOp funcOp, OpAsmPrinter &printer)
     printAttributions(printer, funcOp.getCacheWriteAttributions());
     printer << "; // cacheWrite\n";
     struct_arg_counter = 0;
-    for (int iter = 0; iter < argTypes.size(); iter++) {
+    for (unsigned iter = 0; iter < argTypes.size(); iter++) {
         auto elemType = argTypes[iter].cast<mlir::sw::GridType>().getElementType();
         std::string prefix, suffix;
         if (elemType.cast<mlir::FloatType>().getWidth() == 64)
@@ -500,7 +500,7 @@ static void print(sw::FuncOp funcOp, OpAsmPrinter &printer)
         
         suffix = ")";
         auto shape = argTypes[iter].cast<mlir::sw::GridType>().getShape();
-        for (int iter_j = 1; iter_j < shape.size(); iter_j++)
+        for (unsigned iter_j = 1; iter_j < shape.size(); iter_j++)
             suffix += "[" + std::to_string(shape[iter_j]) + "]";
         
         printer << prefix;
@@ -553,7 +553,7 @@ static ParseResult parseMainFuncOp(OpAsmParser &parser, OperationState &state)
 
     bool isVariadic;
     auto signatureLocation = parser.getCurrentLocation();
-    if (failed(impl::parseFunctionSignature(parser, /*allowVariadic=*/false, 
+    if (failed(function_like_impl::parseFunctionSignature(parser, /*allowVariadic=*/false, 
         entryArgs, argTypes, argAttrs, isVariadic, resultTypes, resultAttrs)))
         return failure();
     if (entryArgs.empty() && !argTypes.empty())
@@ -594,7 +594,7 @@ static void print(sw::MainFuncOp mainFuncOp, OpAsmPrinter &printer)
     // 输出参数列表
     ArrayRef<Type> argTypes = mainFuncOp.getType().getInputs();
     Region &body = mainFuncOp.getOperation()->getRegion(0);
-    for (int iter = 0; iter < argTypes.size(); iter++) {
+    for (unsigned iter = 0; iter < argTypes.size(); iter++) {
         auto elemType = argTypes[iter].cast<mlir::sw::GridType>().getElementType();
         if (elemType.cast<mlir::FloatType>().getWidth() == 64)
             printer << "double ";
@@ -602,7 +602,7 @@ static void print(sw::MainFuncOp mainFuncOp, OpAsmPrinter &printer)
             printer << "float ";
         printer.printOperand(body.getArgument(iter));
         auto shape = argTypes[iter].cast<mlir::sw::GridType>().getShape();
-        for (int iter_j = 0; iter_j < shape.size(); iter_j++)
+        for (unsigned iter_j = 0; iter_j < shape.size(); iter_j++)
             printer << "[" << shape[iter_j] << "]";
         
         if (iter+1 != argTypes.size())
@@ -651,7 +651,7 @@ static ParseResult parseMainIterationFuncOp(OpAsmParser &parser, OperationState 
 
     bool isVariadic;
     auto signatureLocation = parser.getCurrentLocation();
-    if (failed(impl::parseFunctionSignature(parser, /*allowVariadic=*/false,
+    if (failed(function_like_impl::parseFunctionSignature(parser, /*allowVariadic=*/false,
             entryArgs, argTypes, argAttrs, isVariadic, resultTypes, resultAttrs)))
         return failure();
     if (entryArgs.empty() && !argTypes.empty())
@@ -676,7 +676,7 @@ static void print(sw::MainIterationFuncOp mainIterationFuncOp, OpAsmPrinter &pri
     // 输出参数列表
     ArrayRef<Type> argTypes = mainIterationFuncOp.getType().getInputs();
     Region &body = mainIterationFuncOp.getOperation()->getRegion(0);
-    for (int iter = 0; iter < argTypes.size(); iter++) {
+    for (unsigned iter = 0; iter < argTypes.size(); iter++) {
         auto elemType = argTypes[iter].cast<mlir::sw::GridType>().getElementType();
         if (elemType.cast<mlir::FloatType>().getWidth() == 64)
             printer << "double ";
@@ -684,7 +684,7 @@ static void print(sw::MainIterationFuncOp mainIterationFuncOp, OpAsmPrinter &pri
             printer << "float ";
         printer.printOperand(body.getArgument(iter));
         auto shape = argTypes[iter].cast<mlir::sw::GridType>().getShape();
-        for (int iter_j = 0; iter_j < shape.size(); iter_j++)
+        for (unsigned iter_j = 0; iter_j < shape.size(); iter_j++)
             printer << "[" << shape[iter_j] << "]";
         
         if (iter+1 != argTypes.size())
@@ -758,7 +758,7 @@ static void print(sw::LaunchFuncOp launchFuncOp, OpAsmPrinter &printer)
     auto kernelName = launchFuncOp.getKernelName();
     printer << "struct " << kernelName << "_arg " << kernelName << "_param;\n";
 
-    for (int iter = 0; iter < launchFuncOp.operands().size(); iter++)
+    for (unsigned iter = 0; iter < launchFuncOp.operands().size(); iter++)
         printer << kernelName << "_param.arg" << iter << "=" << launchFuncOp.operands()[iter] << ";\n";
     printer << "athread_spawn(";
     printer << launchFuncOp.getKernelName();
@@ -814,7 +814,7 @@ static void print(sw::LaunchMainFuncOp launchMainFuncOp, OpAsmPrinter &printer)
 
     // 输出参数
     auto operands = launchMainFuncOp.operands();
-    for (int iter = 0; iter < operands.size(); iter++) {
+    for (unsigned iter = 0; iter < operands.size(); iter++) {
         printer << operands[iter];
         if (iter+1 != operands.size())
             printer << ", ";
@@ -942,7 +942,7 @@ static void print(sw::TerminatorOp terminatorOp, OpAsmPrinter &printer)
 // 解析函数
 static ParseResult parseForOp(OpAsmParser &parser, OperationState &state)
 {
-    auto &builder = parser.getBuilder();
+    //auto &builder = parser.getBuilder();
     OpAsmParser::OperandType inductionVariable, lb, ub, step;
     
     // 解析迭代变量以及之后的 '='
@@ -970,7 +970,7 @@ static ParseResult parseForOp(OpAsmParser &parser, OperationState &state)
     // 解析region域
     Region *body = state.addRegion();
     if (failed(parser.parseRegion(*body, inductionVariable, inductionVariableType)))
-
+        return failure();
     return success();
 }
 
@@ -1055,7 +1055,7 @@ static ParseResult parseLoadOp(OpAsmParser &parser, OperationState &state)
         if (failed(parser.parseComma())
             || failed(parser.parseType(currentType)))
             return failure();
-        for (int iter = 0 ; iter < operands.size()-1; iter++)
+        for (unsigned iter = 0 ; iter < operands.size()-1; iter++)
             operandTypes.push_back(currentType);
 
         if (failed(parser.parseRParen())) // 解析右括号
@@ -1079,7 +1079,7 @@ static ParseResult parseLoadOp(OpAsmParser &parser, OperationState &state)
 static void print(sw::LoadOp loadOp, OpAsmPrinter &printer)
 {
     printer << loadOp.input();
-    for(int iter = 0; iter < loadOp.pos().size(); iter ++)
+    for(unsigned iter = 0; iter < loadOp.pos().size(); iter ++)
         printer << "[" << loadOp.pos()[iter] << "]";
     printer << ";";
     if (loadOp.res().getType().cast<mlir::FloatType>().getWidth() == 64)
@@ -1102,7 +1102,7 @@ static void print(sw::StoreOp storeOp, OpAsmPrinter &printer)
 {
     SmallVector<Value, 10> operands = storeOp.getOperands();
     printer << operands[1];
-    for (int iter = 0; iter < storeOp.pos().size(); iter ++)
+    for (unsigned iter = 0; iter < storeOp.pos().size(); iter ++)
         printer << "[" << storeOp.pos()[iter] << "]";
     printer << " = " << operands[0] << ";";
     
@@ -1587,7 +1587,7 @@ static void print(sw::MemcpyToLDMOp memcpyToLDMOp, OpAsmPrinter &printer)
     printer << "DMA_get(" << memcpyToLDMOp.mem_addr();
 
     // 输出MEM部分的索引
-    for (int iter = 0; iter < index_size; iter ++) {
+    for (unsigned iter = 0; iter < index_size; iter ++) {
         if (iter == 0 && index_size == 3)
             printer << "[" << memcpyToLDMOp.mem_index()[0] << "+z_iter" << "]";
         else
@@ -1597,7 +1597,7 @@ static void print(sw::MemcpyToLDMOp memcpyToLDMOp, OpAsmPrinter &printer)
     printer << ", " << memcpyToLDMOp.ldm_addr();
 
     // 输出LDM索引部分
-    for (int iter = 0; iter < index_size; iter ++) {
+    for (unsigned iter = 0; iter < index_size; iter ++) {
         if (iter == 0 && index_size == 3)
             printer << "[z_iter]";
         else
@@ -1631,7 +1631,7 @@ static void print(sw::MemcpyToMEMOp memcpyToMEMOp, OpAsmPrinter &printer)
     printer << "DMA_put(" << memcpyToMEMOp.ldm_addr();
 
     // 输出ldm索引部分
-    for (int iter = 0; iter < index_size; iter ++) {
+    for (unsigned iter = 0; iter < index_size; iter ++) {
         if (iter == 0 && index_size == 3)
             printer << "[z_iter]";
         else
@@ -1641,7 +1641,7 @@ static void print(sw::MemcpyToMEMOp memcpyToMEMOp, OpAsmPrinter &printer)
     printer << ", " << memcpyToMEMOp.mem_addr();
 
     // 输出mem索引部分
-    for (int iter = 0; iter < index_size; iter ++) {
+    for (unsigned iter = 0; iter < index_size; iter ++) {
         if (iter == 0 && index_size == 3)
             printer << "[" << memcpyToMEMOp.mem_index()[0] << "+z_iter" << "]";
         else
@@ -1674,7 +1674,7 @@ static void print(sw::VectorLoadUOp vectorLoadUOp, OpAsmPrinter &printer)
 {
     SmallVector<Value, 10> operands = vectorLoadUOp.getOperands();
     printer << "simd_loadu(" << operands[0] << ", &" << operands[1];
-    for (int iter = 0; iter < vectorLoadUOp.pos().size(); iter++)
+    for (unsigned iter = 0; iter < vectorLoadUOp.pos().size(); iter++)
         printer << "[" << vectorLoadUOp.pos()[iter] << "]";
     printer << ");";
 
@@ -1694,7 +1694,7 @@ static void print(sw::VectorStoreUOp vectorStoreUOp, OpAsmPrinter &printer)
 {
     SmallVector<Value, 10> operands = vectorStoreUOp.getOperands();
     printer << "simd_storeu(" << operands[0] << ", &" << operands[1];
-    for (int iter = 0; iter < vectorStoreUOp.pos().size(); iter++)
+    for (unsigned iter = 0; iter < vectorStoreUOp.pos().size(); iter++)
         printer << "[" << vectorStoreUOp.pos()[iter] << "]";
     printer << ");";
 }
@@ -1713,7 +1713,7 @@ static void print(sw::VectorLoadOp vectorLoadOp, OpAsmPrinter &printer)
 {
     SmallVector<Value, 10> operands = vectorLoadOp.getOperands();
     printer << "simd_load(" << operands[0] << ", &" << operands[1];
-    for (int iter = 0; iter < vectorLoadOp.pos().size(); iter++)
+    for (unsigned iter = 0; iter < vectorLoadOp.pos().size(); iter++)
         printer << "[" << vectorLoadOp.pos()[iter] << "]";
     printer << ");";
 }
@@ -1797,7 +1797,7 @@ static void print(sw::AllocOp allocOp, OpAsmPrinter &printer)
     auto elemTypeString = (elemType.cast<mlir::FloatType>().getWidth() == 64) ?
                             "double" : "float";
     int shapeSize = 1;
-    for (int i = 0; i < shape.size(); i++) {
+    for (unsigned i = 0; i < shape.size(); i++) {
         shapeSize *= shape[i];
     }
     auto shapeString = std::to_string(shapeSize);
@@ -1829,6 +1829,7 @@ static ParseResult parseDeAllocOp(OpAsmParser &parser, OperationState &state)
     auto loc = parser.getCurrentLocation();
     if (failed(parser.resolveOperands(operands, operandTypes, loc, state.operands)))
         return failure();
+    return success();
 }
 
 // 输出函数
@@ -1944,18 +1945,18 @@ static void print(sw::MpiExchangeHaloOp mpiExchangeHaloOp, OpAsmPrinter &printer
     printer << "exchange_halo_" << arrayDimString << "_" << arrayElemTypeString << "(";
     // 输出待交换数组名及其维度信息
     printer << mpiExchangeHaloOp.dataArray() << ", ";
-    for (int iter = 0; iter < arrayShape.size(); iter ++)
+    for (unsigned iter = 0; iter < arrayShape.size(); iter ++)
         printer << arrayShape[iter] << ", ";
     // 输出mpiTile信息
     auto mpiTileAttr = mpiExchangeHaloOp.mpiTile();
-    for (int iter = 0; iter < mpiTileAttr.size(); iter ++) {
+    for (unsigned iter = 0; iter < mpiTileAttr.size(); iter ++) {
         printer << mpiTileAttr[iter].cast<mlir::IntegerAttr>().getInt();
         printer << ", ";
     }
     // 输出mpiHalo信息, 分为mpiHaloL和mpiHaloU, 这两者的维度是相同的
     auto mpiHaloLAttr = mpiExchangeHaloOp.mpiHaloL();
     auto mpiHaloUAttr = mpiExchangeHaloOp.mpiHaloU();
-    for (int iter = 0; iter < mpiHaloLAttr.size(); iter ++) {
+    for (unsigned iter = 0; iter < mpiHaloLAttr.size(); iter ++) {
         printer << mpiHaloLAttr[iter].cast<mlir::IntegerAttr>().getInt();
         printer << ", ";
         printer << mpiHaloUAttr[iter].cast<mlir::IntegerAttr>().getInt();
@@ -2016,7 +2017,7 @@ static void print(sw::IfOp ifOp, OpAsmPrinter &printer)
 }
 
 // 创建空的if-then域
-static void buildIfOpTerminatedBody(OpBuilder &builder, Location loc) {
+void buildIfOpTerminatedBody(OpBuilder &builder, Location loc) {
     builder.create<sw::YieldOp>(loc);
 }
 
@@ -2105,9 +2106,5 @@ static void print(sw::CmpOp cmpOp, OpAsmPrinter &printer)
 }
 
 #include "Dialect/SW/SWOpsEnums.cpp.inc"
-namespace mlir {
-namespace sw {
 #define GET_OP_CLASSES
 #include "Dialect/SW/SWOps.cpp.inc"
-}
-}

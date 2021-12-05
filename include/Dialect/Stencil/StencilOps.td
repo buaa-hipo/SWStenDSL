@@ -43,23 +43,22 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, "
-                    "ArrayRef<int64_t> lb, ArrayRef<int64_t> ub, "
-                    "ArrayRef<int64_t> tile, Optional<long unsigned int> cacheAt, "
-                    "TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addAttribute(getLBAttrName(), builder.getI64ArrayAttr(lb));
-            state.addAttribute(getUBAttrName(), builder.getI64ArrayAttr(ub));
-            state.addAttribute(getTileAttrName(), builder.getI64ArrayAttr(tile));
+        OpBuilder<(ins "ValueRange":$operands,
+                    "ArrayRef<int64_t>":$lb, "ArrayRef<int64_t>":$ub, 
+                    "ArrayRef<int64_t>":$tile, "Optional<long unsigned int>":$cacheAt,
+                    "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addAttribute(getLBAttrName(), $_builder.getI64ArrayAttr(lb));
+            $_state.addAttribute(getUBAttrName(), $_builder.getI64ArrayAttr(ub));
+            $_state.addAttribute(getTileAttrName(), $_builder.getI64ArrayAttr(tile));
             if (cacheAt.hasValue())
-                state.addAttribute(getCacheAtAttrName(), builder.getI64IntegerAttr(cacheAt.getValue()));
-            auto region = state.addRegion();
+                $_state.addAttribute(getCacheAtAttrName(), $_builder.getI64IntegerAttr(cacheAt.getValue()));
+            auto region = $_state.addRegion();
             region->push_back(new Block());
             for (auto operand : operands) {
                 region->front().addArgument(operand.getType());
             }
-            state.addTypes(resultTypes);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 
@@ -77,7 +76,7 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
         auto shapeOp = cast<ShapeOp>(this->getOperation());
         for (auto result : res()) {
             auto fieldType = result.getType().cast<GridType>();
-            if (shapeOp.getRank() != fieldType.getRank())
+            if ((unsigned)(shapeOp.getRank()) != fieldType.getRank())
                 return emitOpError("expected result rank to match the operation rank");
         }
 
@@ -89,7 +88,7 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
             if (tile.size() != LB.size() || tile.size() != UB.size())
                 return emitOpError("expected tile, lb, ub have same size");
             
-            for (int i = 0; i < tile.size(); i++) {
+            for (unsigned i = 0; i < tile.size(); i++) {
                 if ((UB[i] - LB[i]) % tile[i] != 0)
                     return emitOpError("ub-lb must  be divisible by tile");
             }
@@ -97,7 +96,7 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
 
         // 检查cacheAt是否不大于问题域维度
         if (cacheAt().hasValue()) {
-            if (shapeOp.getRank() <= cacheAt().getValue())
+            if ((unsigned)(shapeOp.getRank()) <= cacheAt().getValue())
                 return emitOpError("cacheAt is bigger then field rank");
         }
 
@@ -119,7 +118,7 @@ def Stencil_ApplyOp : Stencil_Op<"apply", [
             return result;
         }
 
-        Attribute getCacheAtAttr() { return getAttr("cacheAt"); }
+        Attribute getCacheAtAttr() { return getOperation()->getAttr("cacheAt"); }
 
         Block *getBody() { return &region().front(); }
     }];
@@ -149,12 +148,11 @@ def Stencil_AccessOp : Stencil_Op<"access", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value field, ArrayRef<int64_t> offset", [{
-            state.addOperands(field);
-            state.addAttribute(getOffsetAttrName(), builder.getI64ArrayAttr(offset));
+        OpBuilder<(ins "Value":$field, "ArrayRef<int64_t>":$offset), [{
+            $_state.addOperands(field);
+            $_state.addAttribute(getOffsetAttrName(), $_builder.getI64ArrayAttr(offset));
             auto fieldType = field.getType().cast<stencil::GridType>();
-            state.addTypes(fieldType.getElementType());
+            $_state.addTypes(fieldType.getElementType());
         }]>
     ];
 
@@ -162,7 +160,7 @@ def Stencil_AccessOp : Stencil_Op<"access", [
     let verifier = [{
         auto fieldType = field().getType().cast<stencil::GridType>();
         // 偏移量维度与域的维度必须相同
-        if (offset().size() != fieldType.getRank())
+        if ((unsigned)(offset().size()) != fieldType.getRank())
             return emitOpError("offset and field dimensions do not match");
         // 返回值的类型必须与域中元素类型相同
         if (res().getType() != fieldType.getElementType())
@@ -200,12 +198,11 @@ def Stencil_LoadOp : Stencil_Op<"load", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState & state, "
-                    "Value field, ArrayRef<int64_t> offset", [{
-            state.addOperands(field);
-            state.addAttribute(getOffsetAttrName(), builder.getI64ArrayAttr(offset));
+        OpBuilder<(ins "Value":$field, "ArrayRef<int64_t>":$offset), [{
+            $_state.addOperands(field);
+            $_state.addAttribute(getOffsetAttrName(), $_builder.getI64ArrayAttr(offset));
             auto fieldType = field.getType().cast<stencil::GridType>();
-            state.addTypes(fieldType.getElementType());
+            $_state.addTypes(fieldType.getElementType());
         }]>
     ];
 
@@ -213,7 +210,7 @@ def Stencil_LoadOp : Stencil_Op<"load", [
     let verifier = [{
         auto fieldType = field().getType().cast<stencil::GridType>();
         // 绝对坐标维度与域的维度必须相同
-        if (offset().size() != fieldType.getRank())
+        if ((unsigned)(offset().size()) != fieldType.getRank())
             return emitOpError("absolute position and field dimensions do not match");
         // 返回值的类型必须与域中元素类型相同
         if (res().getType() != fieldType.getElementType())
@@ -246,10 +243,9 @@ def Stencil_StoreOp : Stencil_Op<"store", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value value", [{
-            state.addOperands({value});
-            state.addTypes(stencil::ResultType::get(value.getType()));
+        OpBuilder<(ins "Value":$value), [{
+            $_state.addOperands({value});
+            $_state.addTypes(stencil::ResultType::get(value.getType()));
         }]>
     ];
 
@@ -308,22 +304,21 @@ def Stencil_ReturnOp : Stencil_Op<"return", [
     }];
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state", [{
+        OpBuilder<(ins), [{
             // 使用这个终结符的操作会执行检测操作，这个函数是喂给检测函数的
         }]>,
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, Optional<ArrayAttr> unroll", [{
-            state.addOperands({operands});
+        OpBuilder<(ins "ValueRange":$operands, "Optional<ArrayAttr>":$unroll), [{
+            $_state.addOperands({operands});
             if(unroll.hasValue())
-                state.addAttribute(getUnrollAttrName(), unroll.getValue());
+                $_state.addAttribute(getUnrollAttrName(), unroll.getValue());
         }]>
     ];
 
     // 有效性检验
     let verifier = [{
-        auto applyOp = cast<stencil::ApplyOp>(getParentOp());
+        auto applyOp = cast<stencil::ApplyOp>(getOperation()->getParentOp());
         unsigned int unrollFactor = getUnrollFactor();
-        size_t unrollDim = getUnrollDimension();
+        //size_t unrollDim = getUnrollDimension();
 
         // 参数的数量与apply的结果相匹配
         auto results = applyOp.res();
@@ -388,7 +383,7 @@ def Stencil_ReturnOp : Stencil_Op<"return", [
 //============================================================================//
 // copy操作, 将计算的结构拷贝到输出数组上
 //============================================================================//
-def Stecnil_CopyOp : Stencil_Op<"copy", [
+def Stencil_CopyOp : Stencil_Op<"copy", [
     DeclareOpInterfaceMethods<ShapeOp>
     ]> {
     let summary = "copy operation, copy the result to output array";
@@ -407,11 +402,11 @@ def Stecnil_CopyOp : Stencil_Op<"copy", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, Value result, "
-                    "Value output, ArrayRef<int64_t> lb, ArrayRef<int64_t> ub", [{
-            state.addOperands({result, output});
-            state.addAttribute(getLBAttrName(), builder.getI64ArrayAttr(lb));
-            state.addAttribute(getUBAttrName(), builder.getI64ArrayAttr(ub));
+        OpBuilder<(ins "Value":$result, 
+                    "Value":$output, "ArrayRef<int64_t>":$lb, "ArrayRef<int64_t>":$ub), [{
+            $_state.addOperands({result, output});
+            $_state.addAttribute(getLBAttrName(), $_builder.getI64ArrayAttr(lb));
+            $_state.addAttribute(getUBAttrName(), $_builder.getI64ArrayAttr(ub));
         }]>
     ];
 
@@ -464,19 +459,19 @@ def Stencil_IterationOp : Stencil_Op<"iteration"> {
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, SymbolRefAttr stencilFunc, "
-                    "ValueRange bind_params, int64_t iterNum, int64_t bind_param_num, "
-                    "Optional<ArrayRef<int64_t>> mpiTile, "
-                    "Optional<ArrayRef<int64_t>> mpiHaloL, Optional<ArrayRef<int64_t>> mpiHaloU", [{
-            state.addOperands(bind_params);
-            state.addAttribute(getStencilFuncAttrName(), stencilFunc);
-            state.addAttribute(getBindParamNumAttrName(), builder.getI64IntegerAttr(bind_param_num));
-            state.addAttribute(getIterNumAttrName(), builder.getI64IntegerAttr(iterNum));
+        OpBuilder<(ins "SymbolRefAttr":$stencilFunc,
+                    "ValueRange":$bind_params, "int64_t":$iterNum, "int64_t":$bind_param_num,
+                    "Optional<ArrayRef<int64_t>>":$mpiTile, 
+                    "Optional<ArrayRef<int64_t>>":$mpiHaloL, "Optional<ArrayRef<int64_t>>":$mpiHaloU), [{
+            $_state.addOperands(bind_params);
+            $_state.addAttribute(getStencilFuncAttrName(), stencilFunc);
+            $_state.addAttribute(getBindParamNumAttrName(), $_builder.getI64IntegerAttr(bind_param_num));
+            $_state.addAttribute(getIterNumAttrName(), $_builder.getI64IntegerAttr(iterNum));
             if (mpiTile.hasValue()) 
-                state.addAttribute(getMpiTileAttrName(), builder.getI64ArrayAttr(mpiTile.getValue()));
+                $_state.addAttribute(getMpiTileAttrName(), $_builder.getI64ArrayAttr(mpiTile.getValue()));
             if (mpiHaloL.hasValue() && mpiHaloU.hasValue()) {
-                state.addAttribute(getMpiHaloLAttrName(), builder.getI64ArrayAttr(mpiHaloL.getValue()));
-                state.addAttribute(getMpiHaloUAttrName(), builder.getI64ArrayAttr(mpiHaloU.getValue()));
+                $_state.addAttribute(getMpiHaloLAttrName(), $_builder.getI64ArrayAttr(mpiHaloL.getValue()));
+                $_state.addAttribute(getMpiHaloUAttrName(), $_builder.getI64ArrayAttr(mpiHaloU.getValue()));
             }
         }]>
     ];
@@ -484,8 +479,8 @@ def Stencil_IterationOp : Stencil_Op<"iteration"> {
     // 正确性检查
     let verifier = [{
         // mpiTile和mpiHalo[LU]必须同时出现或者同时不出现
-        if (mpiTile().hasValue() && mpiHaloL().hasValue() && mpiHaloU().hasValue() ||
-            !mpiTile().hasValue() && !mpiHaloL().hasValue() && !mpiHaloU().hasValue())
+        if ((mpiTile().hasValue() && mpiHaloL().hasValue() && mpiHaloU().hasValue()) ||
+            (!mpiTile().hasValue() && !mpiHaloL().hasValue() && !mpiHaloU().hasValue()))
                 return success();
         return emitOpError("mpiTile and mpiHalo must present or not present at the same time");
     }];
@@ -502,10 +497,10 @@ def Stencil_IterationOp : Stencil_Op<"iteration"> {
         // 获取调用函数名称
         StringRef getStencilFuncName() { return stencilFuncName(); }
         unsigned int getBindParamNum() { 
-            return getAttrOfType<IntegerAttr>(getBindParamNumAttrName()).getInt(); 
+            return getOperation()->getAttrOfType<IntegerAttr>(getBindParamNumAttrName()).getInt(); 
         }
         unsigned int  getIterNum() { 
-            return getAttrOfType<IntegerAttr>(getIterNumAttrName()).getInt(); 
+            return getOperation()->getAttrOfType<IntegerAttr>(getIterNumAttrName()).getInt(); 
         }
 
         // 是否启用mpi
@@ -538,12 +533,11 @@ def Stencil_CastToMemRefOp : Stencil_Op<"castToMemRef", [
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value field, ArrayRef<int64_t> offset, int64_t vectorWidth", [{
-            state.addOperands(field);
-            state.addAttribute(getOffsetAttrName(), builder.getI64ArrayAttr(offset));
+        OpBuilder<(ins "Value":$field, "ArrayRef<int64_t>":$offset, "int64_t":$vectorWidth), [{
+            $_state.addOperands(field);
+            $_state.addAttribute(getOffsetAttrName(), $_builder.getI64ArrayAttr(offset));
             auto fieldType = field.getType().cast<stencil::GridType>();
-            state.addTypes(MemRefType::get(vectorWidth, fieldType.getElementType()));
+            $_state.addTypes(MemRefType::get(vectorWidth, fieldType.getElementType()));
         }]>
     ];
 
@@ -551,7 +545,7 @@ def Stencil_CastToMemRefOp : Stencil_Op<"castToMemRef", [
     let verifier = [{
         auto fieldType = field().getType().cast<stencil::GridType>();
         // 偏移量维度与域的维度必须相同
-        if (offset().size() != fieldType.getRank())
+        if ((unsigned)(offset().size()) != fieldType.getRank())
             return emitOpError("offset and field dimensions do not match");
         // 返回值的类型必须与域中元素类型相同
         if (res().getType().cast<MemRefType>().getElementType() != fieldType.getElementType())

@@ -12,7 +12,7 @@
 #ifndef _DIALECT_STENCIL_STENCILDIALECT_H_
 #define _DIALECT_STENCIL_STENCILDIALECT_H_
 #include "mlir/IR/Dialect.h"
-#include "mlir/IR/Function.h"
+#include "mlir/IR/BuiltinOps.h"
 #include <cstdint>
 
 namespace mlir {
@@ -41,11 +41,11 @@ public:
     static StringRef getResultTypeName() {return "result";}
 
     static bool isStencilProgram(FuncOp funcOp) {
-        return !!funcOp.getAttr(getStencilProgarmAttrName());
+        return !!funcOp->getAttr(getStencilProgarmAttrName());
     }
 
     static bool isStencilIteration(FuncOp funcOp) {
-        return !!funcOp.getAttr(getStencilIterationAttrName());
+        return !!funcOp->getAttr(getStencilIterationAttrName());
     }
 
     // 解析本方言中的类型

@@ -18,6 +18,8 @@
 #include <mlir/Pass/PassManager.h>
 #include <mlir/Support/MlirOptMain.h>
 #include <mlir/Parser.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/SourceMgr.h>
 
 #include "Parser/Parser.h"
 #include "Parser/MLIRGen.h"
@@ -26,7 +28,7 @@
 #include "Dialect/SW/SWDialect.h"
 #include "Dialect/Stencil/Passes.h"
 #include "Conversion/StencilToSW/Passes.h"
-#include "Conversion/StencilToVector/Passes.h"
+// #include "Conversion/StencilToVector/Passes.h"
 
 using namespace mlir;
 using namespace swsten;
@@ -144,8 +146,8 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
     if (kernelFusionPassAction)
         pm.addPass(mlir::createStencilKernelFusionPass());
 
-    if (vectorPassAction > 1)
-        pm.addPass(mlir::createConvertStencilToVectorPass(vectorPassAction));
+    // if (vectorPassAction > 1)
+    //     pm.addPass(mlir::createConvertStencilToVectorPass(vectorPassAction));
 
     // 检查是否需要下降到sw Dialect
     bool isLoweringToSW = emitAction == Action::DumpSW;
@@ -162,7 +164,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
 int main(int argc, char *argv[])
 {
-    registerAllDialects();
+    //registerAllDialects();
     registerAllPasses();
 
     // 注册命令行选项
@@ -176,7 +178,7 @@ int main(int argc, char *argv[])
         return dumpAST();
     
     // 如果不是打印AST, 则需要将其转换为MLIR
-    mlir::MLIRContext context(/*loadAllDialects=*/false);
+    mlir::MLIRContext context;
     // 加载stencil Dialect
     context.getOrLoadDialect<mlir::stencil::StencilDialect>();
     context.getOrLoadDialect<mlir::StandardOpsDialect>();

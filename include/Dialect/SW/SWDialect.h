@@ -13,7 +13,7 @@
 #define _DIALECT_SW_SWDIALECT_H_
 
 #include <mlir/IR/Dialect.h>
-#include <mlir/IR/Function.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <cstdint>
 
 namespace mlir {

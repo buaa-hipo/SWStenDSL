@@ -13,11 +13,10 @@
 #define _DIALECT_STENCIL_STENCIL_OPS_H_
 
 #include <mlir/IR/Attributes.h>
-#include <mlir/IR/Function.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
-#include <mlir/IR/Module.h>
 #include <mlir/IR/PatternMatch.h>
-#include <mlir/IR/StandardTypes.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/Interfaces/SideEffectInterfaces.h>
 #include <mlir/Support/LogicalResult.h>
 #include <cstdint>
@@ -25,13 +24,19 @@
 
 #include "Dialect/Stencil/StencilTypes.h"
 
-namespace mlir {
+namespace mlir{
+using OwningRewritePatternList = RewritePatternSet;
 namespace stencil {
 
 #include "Dialect/Stencil/StencilInterfaces.h.inc"
+}
+}
+
 #define GET_OP_CLASSES
 #include "Dialect/Stencil/StencilOps.h.inc"
 
+namespace mlir{
+namespace stencil {
 // apply 操作正则化
 struct ApplyOpPattern : public OpRewritePattern<stencil::ApplyOp> {
     ApplyOpPattern(MLIRContext *context, PatternBenefit benefit = 1);

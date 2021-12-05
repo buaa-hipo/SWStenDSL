@@ -70,7 +70,7 @@ void ASTDumper::dump(const VarType &type) {
     llvm::errs() << "<";
 
     std::vector<int64_t> shape = type.shape;
-    for (int i = 0; i < shape.size(); i++) 
+    for (unsigned i = 0; i < shape.size(); i++) 
         llvm::errs() << shape[i] << "x";
 
     dump(type.elemType);
@@ -128,7 +128,7 @@ void ASTDumper::dump(ArrayExprAST *array) {
     llvm::errs() << array->getName();
 
     std::vector<int64_t> index = array->getIndex();
-    for (int i = 0; i < index.size(); i++) {
+    for (unsigned i = 0; i < index.size(); i++) {
         llvm::errs() << "[" << index[i] << "]";
     }
     
@@ -163,7 +163,7 @@ void ASTDumper::dump(KernelAST *kernel) {
     llvm::errs() << "-->Tile: [";
     std::vector<int64_t> tile;
     tile = kernel->getTile();
-    for (int i=0; i < tile.size(); i++) {
+    for (unsigned i=0; i < tile.size(); i++) {
         llvm::errs() << tile[i];
         
         if (i+1 != tile.size())
@@ -199,7 +199,7 @@ void ASTDumper::dump(StencilAST *stencil) {
     indent();
     llvm::errs() << "-->Input: \n";
     llvm::ArrayRef<std::unique_ptr<VarDeclExprAST>> args = std::move(stencil->getArgs());
-    for (int i = 0; i < args.size(); i++) {
+    for (unsigned i = 0; i < args.size(); i++) {
         dump(args[i].get());
     }
 
@@ -211,7 +211,7 @@ void ASTDumper::dump(StencilAST *stencil) {
     indent();
     std::vector<int64_t> mpiTile = stencil->getMpiTile();
     llvm::errs() << "-->mpiTile: [";
-    for (int i = 0; i < mpiTile.size(); i++) {
+    for (unsigned i = 0; i < mpiTile.size(); i++) {
         llvm::errs() << mpiTile[i];
 
         if (i+1 != mpiTile.size())
@@ -227,7 +227,7 @@ void ASTDumper::dump(StencilAST *stencil) {
     indent();
     llvm::errs() << "-->Kernels:\n";
     llvm::ArrayRef<std::unique_ptr<KernelAST>> kernelList = std::move(stencil->getKernelList());
-    for (int i = 0; i < kernelList.size(); i++) {
+    for (unsigned i = 0; i < kernelList.size(); i++) {
         dump(kernelList[i].get());
     }
 

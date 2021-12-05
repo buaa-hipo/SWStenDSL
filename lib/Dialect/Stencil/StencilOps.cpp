@@ -40,7 +40,7 @@
 #include "Dialect/Stencil/StencilTypes.h"
 
 using namespace mlir;
-
+using namespace stencil;
 //============================================================================//
 // apply操作相关函数
 //============================================================================//
@@ -187,7 +187,7 @@ static ParseResult parseIterationOp(OpAsmParser &parser, OperationState &state)
     SmallVector<Type, 8> operandTypes;
     OpAsmParser::OperandType currentOperand;
     Type currentType;
-    int bind_param_size = 0;
+    unsigned bind_param_size = 0;
     
     if (failed(parser.parseLParen())) // 解析最外层左括号
         return failure();
@@ -275,7 +275,7 @@ static void print(stencil::IterationOp iterationOp, OpAsmPrinter &printer)
     // 输出被调用函数名称
     printer << iterationOp.getStencilFuncName() << ' ';
     SmallVector<Value, 10> operands = iterationOp.getOperands();
-    auto bindParamAttr = iterationOp.getAttr(stencil::IterationOp::getBindParamNumAttrName()).cast<IntegerAttr>();
+    auto bindParamAttr = iterationOp->getAttr(stencil::IterationOp::getBindParamNumAttrName()).cast<IntegerAttr>();
     int bind_param_num = bindParamAttr.getValue().getSExtValue();
     
     // 输出左绑定参数
@@ -329,7 +329,7 @@ OpOperand *stencil::StoreOp::getReturnOpOperand() {
         if (!yieldOp)
             return nullptr;
         // 在父region中继续搜索, 此时return操作使用的是yieldOp的父op的返回值
-        current = yieldOp.getParentOp()->getResult(operand->getOperandNumber());
+        current = yieldOp->getParentOp()->getResult(operand->getOperandNumber());
     }
 
     return nullptr;
@@ -411,7 +411,7 @@ struct CopyOpHoisting : public OpRewritePattern<stencil::CopyOp> {
         auto current = op;
         // 跳过计算的操作
         while (current->getNextNode() && !isa<stencil::CopyOp>(current->getNextNode())
-                && !current->getNextNode()->isKnownTerminator())
+                && !current->getNextNode()->mightHaveTrait<OpTrait::IsTerminator>())
             current = current->getNextNode();
         // 移动该操作
         if (current != op) {
@@ -440,7 +440,7 @@ void stencil::CopyOp::getCanonicalizationPatterns(
 namespace mlir {
 namespace stencil {
 #include "Dialect/Stencil/StencilInterfaces.cpp.inc"
+}
+}
 #define GET_OP_CLASSES
 #include "Dialect/Stencil/StencilOps.cpp.inc"
-} // end of namespace stencil
-} // end of namespace mlir

@@ -16,11 +16,10 @@
 #include <mlir/IR/AffineMap.h>
 #include <mlir/IR/BlockAndValueMapping.h>
 #include <mlir/IR/Builders.h>
-#include <mlir/IR/Function.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
-#include <mlir/IR/Module.h>
 #include <mlir/IR/PatternMatch.h>
-#include <mlir/IR/StandardTypes.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/UseDefLists.h>
 #include <mlir/IR/Value.h>
 #include <mlir/Pass/Pass.h>
@@ -73,8 +72,8 @@ public:
 
         // 创建新函数类型
         auto funcType =
-            FunctionType::get(result.getConvertedTypes(),
-                            funcOp.getType().getResults(), funcOp.getContext());
+            FunctionType::get(funcOp.getContext(),result.getConvertedTypes(),
+                            funcOp.getType().getResults());
 
         // 对于描述stencil计算的func部分
         if (StencilDialect::isStencilProgram(funcOp)) {
@@ -157,7 +156,7 @@ public:
                 is_parameter = true;
             }
 
-            for (int64_t i = 0; i < elemShape.size(); i++) {
+            for (unsigned i = 0; i < elemShape.size(); i++) {
                 int64_t halo_size_l = shapeOp.getLB()[i];
                 int64_t halo_size_u = elemShape[i] - shapeOp.getUB()[i];
                 int64_t tile = applyOp.getTile()[i];
@@ -178,12 +177,12 @@ public:
         }
         // 计算cacheWrite的大小
         SmallVector<Type, 3> cacheWriteAttrType;
-        for (int i = 0; i < applyOp.getNumResults(); i++) {
+        for (unsigned i = 0; i < applyOp.getNumResults(); i++) {
             auto applyOpResultShape = applyOp.getResult(i).getType().cast<stencil::GridType>().getShape();
             auto cacheWriteType = applyOp.getResult(i).getType().cast<stencil::GridType>().getElementType();
             SmallVector<int64_t, 3> cacheWriteShape;
             cacheWriteShape.clear();
-            for (int64_t j = 0; j < applyOpResultShape.size(); j++) {
+            for (unsigned j = 0; j < applyOpResultShape.size(); j++) {
                 int64_t halo_size_l = shapeOp.getLB()[j];
                 int64_t halo_size_u = applyOpResultShape[j] - shapeOp.getUB()[j];
                 int64_t tile = applyOp.getTile()[j];
@@ -198,7 +197,7 @@ public:
 
         /*************** 为每个stencil计算的结果申请临时的存储空间 ******************/
         SmallVector<Value, 10> newResults;
-        for (int i = 0; i < applyOp.getNumResults(); i++) {
+        for (unsigned i = 0; i < applyOp.getNumResults(); i++) {
             auto allocType = typeConverter.convertType(applyOp.getResult(i).getType());
             auto allocOp = rewriter.create<sw::AllocOp>(loc, allocType);
             newResults.push_back(allocOp.getResult());
@@ -260,7 +259,7 @@ public:
                 // 对应的cacheRead参数信息
                 auto elem_parameter = launchOp.getCacheReadAttributions()[en];
                 int64_t dma_size = 1;
-                for (int i = 0; i < elemShape.size(); i++) {
+                for (unsigned i = 0; i < elemShape.size(); i++) {
                     dma_size *= elemShape[i];
                     index_0.push_back(value_0);
                 }
@@ -293,7 +292,7 @@ public:
                     // 计算索引
                     SmallVector<Value, 3> indexArray;
                     indexArray.clear();
-                    for (int iter = 0; iter < elemShape.size(); iter++) {
+                    for (unsigned iter = 0; iter < elemShape.size(); iter++) {
                         if (iter <= cacheAt) {
                             Value tile_size =  rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(loop_tile[iter]), rewriter.getI64Type());
                             Value index = rewriter.create<sw::MuliOp>(loc, rewriter.getI64Type(), inductionVars[iter], tile_size);
@@ -308,7 +307,7 @@ public:
                     auto zDimAttr = rewriter.getI64IntegerAttr(zDim);
                     // 计算cnt参数, 按面加载, 不计算三维情况的最高维度
                     int64_t cnt = 1;
-                    int iter = 0;
+                    unsigned iter = 0;
                     if (elemShape.size() == 3) {
                         iter = 1;
                     }
@@ -357,7 +356,7 @@ public:
                     // 计算索引, 写回时要加上偏移量, 确保位置正确
                     SmallVector<Value, 3> indexArray;
                     indexArray.clear();
-                    for (int iter = 0; iter < elemShape.size(); iter++) {
+                    for (unsigned iter = 0; iter < elemShape.size(); iter++) {
                         Value halo_l = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(shapeOp.getLB()[iter]), rewriter.getI64Type());
                         if (iter <= cacheAt) {
                             Value tile_size = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(loop_tile[iter]), rewriter.getI64Type());
@@ -374,7 +373,7 @@ public:
                     auto zDimAttr = rewriter.getI64IntegerAttr(zDim);
                     // 计算cnt参数, 按面加载, 不计算三维情况的最高维度
                     int64_t cnt = 1;
-                    int iter = 0;
+                    unsigned iter = 0;
                     if (elemShape.size() == 3) {
                         iter = 1;
                     }
@@ -402,7 +401,7 @@ public:
         // NOTICE: 此处强制约定最内层循环的前2-3个AddiOp操作对应的为基准位置, 方便后面的操作查找基准位置
         // 在最内层循环开头插入索引基点计算, 基准位置为出发位置加上相应的内层循环索引
         rewriter.setInsertionPointToStart(forOp.getBody());
-        for (int i = 0; i < shapeOp.getLB().size(); i++) {
+        for (unsigned i = 0; i < shapeOp.getLB().size(); i++) {
             rewriter.create<sw::AddiOp>(loc, rewriter.getI64Type(), innerLoopBasePos[i], inductionVars[i+shapeOp.getLB().size()]);
         }
 
@@ -419,8 +418,8 @@ public:
 
         /************************ 释放之前申请的临时空间 **************************/
         rewriter.setInsertionPoint(
-            applyOp.getParentRegion()->back().getTerminator());
-        for (int i = 0; i < newResults.size(); i++) {
+            applyOp->getParentRegion()->back().getTerminator());
+        for (unsigned i = 0; i < newResults.size(); i++) {
             rewriter.create<sw::DeAllocOp>(loc, newResults[i]);
         }
 
@@ -462,7 +461,7 @@ public:
         }
         // 找到对应的cacheRead数组
         auto launchOp = operation->getParentOfType<sw::LaunchOp>();
-        auto launchOpOperands = launchOp.getOperands();
+        //auto launchOpOperands = launchOp.getOperands();
         auto launchOpCacheRead = launchOp.getCacheReadAttributions();
         int cacheReadIndex;
         for (auto elem : llvm::enumerate(launchOp.getOperands())) {
@@ -483,7 +482,7 @@ public:
     matchAndRewrite(Operation *operation, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const override {
         auto loc = operation->getLoc();
-        auto loadOp = cast<stencil::LoadOp>(operation);
+        //auto loadOp = cast<stencil::LoadOp>(operation);
         auto offsetOp = cast<OffsetOp>(operation);
         // 计算位置
         SmallVector<Value, 3> loadOffset;
@@ -494,7 +493,7 @@ public:
         }
         // 找到对应的cacheRead数组
         auto launchOp = operation->getParentOfType<sw::LaunchOp>();
-        auto launchOpOperands = launchOp.getOperands();
+        //auto launchOpOperands = launchOp.getOperands();
         auto launchOpCacheRead = launchOp.getCacheReadAttributions();
         int cacheReadIndex;
         for (auto elem : llvm::enumerate(launchOp.getOperands())) {
@@ -568,7 +567,7 @@ public:
             Value unrollOffsetValue = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(unroll_offset), rewriter.getI64Type());
             SmallVector<Value, 3> storePos;
 
-            for (int i = 0; i < domainDim; i++) {
+            for (unsigned i = 0; i < domainDim; i++) {
                 Value halo_l = rewriter.create<sw::ConstantOp>(loc, rewriter.getI64IntegerAttr(haloLArray[i]), rewriter.getI64Type());
                 Value base = rewriter.create<sw::SubiOp>(loc, rewriter.getI64Type(), basePos[i], halo_l);
                 if (i == unrollDim) {
@@ -610,8 +609,8 @@ public:
     LogicalResult
     matchAndRewrite(Operation *operation, ArrayRef<Value> operands,
                     ConversionPatternRewriter &rewriter) const override {
-        auto loc = operation->getLoc();
-        auto copyOp = cast<stencil::CopyOp>(operation);
+        //auto loc = operation->getLoc();
+        //auto copyOp = cast<stencil::CopyOp>(operation);
         // 获取参数
         auto result = operands[0];
         auto output = operands[1];
@@ -748,7 +747,7 @@ public:
         auto funcName = iterationOp.getStencilFuncName();
 
         SmallVector<Value, 8> operands1, operands2;
-        for (int i = 0; i < bindParamNum; i++) {
+        for (unsigned i = 0; i < bindParamNum; i++) {
             operands1.push_back(operands[i]);
             operands2.push_back(operands[i+bindParamNum]);
         }
@@ -828,7 +827,7 @@ public:
 
         // 找到对应的cacheRead数组
         auto launchOp = operation->getParentOfType<sw::LaunchOp>();
-        auto launchOperands = launchOp.getOperands();
+        //auto launchOperands = launchOp.getOperands();
         // getOperand返回的是未修改之前的op定义的值, 此处的castToMemReefOperand为applyOp
         // 定义的value, 而lowering函数(即本下降函数)的operands为修改之后的op定义的value,
         // 因此,此处不能loadlowring或accesslowering那样, 通过launchOp去寻找对应的cache数组
@@ -845,7 +844,7 @@ public:
         // 创建一个constant op 用来vector 变量声明
         SmallVector<APFloat, 4> attrValue;
         bool is_double = (elementType.cast<FloatType>().getWidth() == 64);
-        for (int i = 0; i < vectorWidth; i++) {
+        for (unsigned i = 0; i < vectorWidth; i++) {
             if (is_double)
                 attrValue.push_back(APFloat((double)0));
             else
@@ -898,6 +897,7 @@ public:
         if (auto funcOp = dyn_cast<FuncOp>(op)) {
             return !StencilDialect::isStencilProgram(funcOp) && !StencilDialect::isStencilIteration(funcOp);
         }
+        return true;
     }
 };
 
@@ -912,7 +912,7 @@ struct StencilToSWPass : public StencilToSWPassBase<StencilToSWPass> {
 };
 
 void StencilToSWPass::runOnOperation() {
-    OwningRewritePatternList patterns;
+    OwningRewritePatternList patterns(&getContext());
     auto module = getOperation();
     
     // 记录每个apply操作的下界, apply每个输入以及其中的store操作的参数与下界的绑定, 这样在变换相关操作时可以
@@ -948,9 +948,9 @@ void StencilToSWPass::runOnOperation() {
     target.addDynamicallyLegalOp<FuncOp>();
     target.addLegalOp<vector::ConstantMaskOp>();
     target.addLegalOp<mlir::stencil::CastToMemRefOp>();
-    target.addLegalOp<ModuleOp, ModuleTerminatorOp>();
+    target.addLegalOp<ModuleOp>();
 
-    if (failed(applyFullConversion(module, target, patterns))) {
+    if (failed(applyFullConversion(module, target, std::move(patterns)))) {
         signalPassFailure();
     }
 }

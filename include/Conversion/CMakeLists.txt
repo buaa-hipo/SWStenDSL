@@ -1,2 +1,2 @@
 add_subdirectory(StencilToSW)
-add_subdirectory(StencilToVector)
+# add_subdirectory(StencilToVector)

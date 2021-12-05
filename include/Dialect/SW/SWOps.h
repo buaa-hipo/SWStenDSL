@@ -13,11 +13,10 @@
 #define _DIALECT_SW_SW_OPS_H_
 
 #include <mlir/IR/Attributes.h>
-#include <mlir/IR/Function.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
-#include <mlir/IR/Module.h>
 #include <mlir/IR/PatternMatch.h>
-#include <mlir/IR/StandardTypes.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/Interfaces/SideEffectInterfaces.h>
 #include <mlir/Support/LogicalResult.h>
 #include <cstdint>
@@ -26,15 +25,13 @@
 #include "Dialect/SW/SWTypes.h"
 
 using namespace mlir;
-static void buildIfOpTerminatedBody(OpBuilder &builder, Location loc);
+void buildIfOpTerminatedBody(OpBuilder &builder, Location loc);
 
 #include "Dialect/SW/SWOpsEnums.h.inc"
-namespace mlir {
-namespace sw {
-
 #define GET_OP_CLASSES
 #include "Dialect/SW/SWOps.h.inc"
-
+namespace mlir{
+namespace sw{
 } // end of namespace sw
 } // end of namespace mlir
 

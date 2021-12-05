@@ -26,9 +26,9 @@ def SW_ModuleOp : SW_Op<"module", [
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, StringRef name", [{
-            state.addAttribute(::mlir::SymbolTable::getSymbolAttrName(), builder.getStringAttr(name));
-            auto region = state.addRegion();
+        OpBuilder<(ins "StringRef":$name), [{
+            $_state.addAttribute(::mlir::SymbolTable::getSymbolAttrName(), $_builder.getStringAttr(name));
+            auto region = $_state.addRegion();
             region->push_back(new Block());
         }]>
     ];
@@ -65,15 +65,15 @@ def SW_FuncOp : SW_Op<"func", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, StringRef name, "
-                    "FunctionType type, ArrayRef<Type> cacheRead, "
-                    "ArrayRef<Type> cacheWrite", [{
-            state.addAttribute(SymbolTable::getSymbolAttrName(), 
-                                builder.getStringAttr(name));
-            state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
-            state.addAttribute(getCacheReadAttrNumName(), builder.getI64IntegerAttr(cacheRead.size()));
-            state.addAttribute(getCacheWriteAttrNumName(), builder.getI64IntegerAttr(cacheWrite.size()));
-            Region *body = state.addRegion();
+        OpBuilder<(ins "StringRef":$name,
+                    "FunctionType":$type, "ArrayRef<Type>":$cacheRead, 
+                    "ArrayRef<Type>":$cacheWrite), [{
+            $_state.addAttribute(SymbolTable::getSymbolAttrName(), 
+                                $_builder.getStringAttr(name));
+            $_state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
+            $_state.addAttribute(getCacheReadAttrNumName(), $_builder.getI64IntegerAttr(cacheRead.size()));
+            $_state.addAttribute(getCacheWriteAttrNumName(), $_builder.getI64IntegerAttr(cacheWrite.size()));
+            Region *body = $_state.addRegion();
             Block *entryBlock = new Block;
             entryBlock->addArguments(type.getInputs());
             entryBlock->addArguments(cacheRead);
@@ -92,7 +92,7 @@ def SW_FuncOp : SW_Op<"func", [
         static StringRef getCacheWriteAttrNumName() { return "cacheWriteAttrNum"; }
 
         FunctionType getType() {
-            return getAttrOfType<TypeAttr>(getTypeAttrName()).getValue().cast<FunctionType>();
+            return getOperation()->getAttrOfType<TypeAttr>(getTypeAttrName()).getValue().cast<FunctionType>();
         }
 
         unsigned int getNumFuncArguments() { return getType().getNumInputs(); }
@@ -100,11 +100,11 @@ def SW_FuncOp : SW_Op<"func", [
 
         // 返回cacheRead属性的数量
         unsigned int getNumCacheReadAttributions() {
-            return getAttrOfType<IntegerAttr>(getCacheReadAttrNumName()).getInt();
+            return getOperation()->getAttrOfType<IntegerAttr>(getCacheReadAttrNumName()).getInt();
         }
         // 返回cacheWrite属性的数量
         unsigned int getNumCacheWriteAttributions() {
-            return getAttrOfType<IntegerAttr>(getCacheWriteAttrNumName()).getInt();
+            return getOperation()->getAttrOfType<IntegerAttr>(getCacheWriteAttrNumName()).getInt();
         }
         // 返回所有cacheRead属性
         ArrayRef<BlockArgument> getCacheReadAttributions() {
@@ -154,12 +154,12 @@ def SW_MainFuncOp : SW_Op <"main_func", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, StringRef name, "
-                    "FunctionType type", [{
-            state.addAttribute(SymbolTable::getSymbolAttrName(),
-                                builder.getStringAttr(name));
-            state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
-            Region *body = state.addRegion();
+        OpBuilder<(ins "StringRef":$name,
+                    "FunctionType":$type), [{
+            $_state.addAttribute(SymbolTable::getSymbolAttrName(),
+                                $_builder.getStringAttr(name));
+            $_state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
+            Region *body = $_state.addRegion();
             Block *entryBlock = new Block;
             entryBlock->addArguments(type.getInputs());
             body->getBlocks().push_back(entryBlock);
@@ -204,12 +204,12 @@ def SW_MainIterationFuncOp : SW_Op<"main_iteration_func", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, StringRef name, "
-                    "FunctionType type", [{
-            state.addAttribute(SymbolTable::getSymbolAttrName(),
-                                builder.getStringAttr(name));
-            state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
-            Region *body = state.addRegion();
+        OpBuilder<(ins "StringRef":$name,
+                    "FunctionType":$type), [{
+            $_state.addAttribute(SymbolTable::getSymbolAttrName(),
+                                $_builder.getStringAttr(name));
+            $_state.addAttribute(getTypeAttrName(), TypeAttr::get(type));
+            Region *body = $_state.addRegion();
             Block *entryBlock = new Block;
             entryBlock->addArguments(type.getInputs());
             body->getBlocks().push_back(entryBlock);
@@ -251,11 +251,10 @@ def SW_LaunchFuncOp : SW_Op<"launch_func"> {
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "SymbolRefAttr kernelFunc, "
-                    "ValueRange kernelOperands", [{
-            state.addOperands(kernelOperands);
-            state.addAttribute(getKernelAttrName(), kernelFunc);
+        OpBuilder<(ins "SymbolRefAttr":$kernelFunc,
+                    "ValueRange":$kernelOperands), [{
+            $_state.addOperands(kernelOperands);
+            $_state.addAttribute(getKernelAttrName(), kernelFunc);
         }]>
     ];
 
@@ -264,7 +263,7 @@ def SW_LaunchFuncOp : SW_Op<"launch_func"> {
         StringRef getKernelName() { return kernel(); }
 
         // 获取spe函数的第i个参数
-        Value getKernelOperand(unsigned int i) { getOperand(i); }
+        Value getKernelOperand(unsigned int i) { return getOperand(i); }
 
         // 获取spe函数Attribute的名称
         static StringRef getKernelAttrName() { return "kernel"; }
@@ -287,11 +286,10 @@ def SW_LaunchMainFuncOp : SW_Op<"launch_main_func"> {
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "SymbolRefAttr mainFuncName, "
-                    "ValueRange mainFuncOperands", [{
-            state.addOperands(mainFuncOperands);
-            state.addAttribute(getMainFuncAttrName(), mainFuncName);
+        OpBuilder<(ins "SymbolRefAttr":$mainFuncName, 
+                    "ValueRange":$mainFuncOperands), [{
+            $_state.addOperands(mainFuncOperands);
+            $_state.addAttribute(getMainFuncAttrName(), mainFuncName);
         }]>
     ];
 
@@ -322,16 +320,15 @@ def SW_LaunchOp : SW_Op<"launch", []> {
     let regions = (region SizedRegion<1>:$region);
 
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, "
-                    "ArrayRef<Type> cacheRead, ArrayRef<Type> cacheWrite", [{
+        OpBuilder<(ins "ValueRange":$operands,
+                    "ArrayRef<Type>":$cacheRead, "ArrayRef<Type>":$cacheWrite), [{
             // 处理参数和属性
-            state.addOperands(operands);
-            state.addAttribute(getCacheReadAttrNumName(), builder.getI64IntegerAttr(cacheRead.size()));
-            state.addAttribute(getCacheWriteAttrNumName(), builder.getI64IntegerAttr(cacheWrite.size()));
+            $_state.addOperands(operands);
+            $_state.addAttribute(getCacheReadAttrNumName(), $_builder.getI64IntegerAttr(cacheRead.size()));
+            $_state.addAttribute(getCacheWriteAttrNumName(), $_builder.getI64IntegerAttr(cacheWrite.size()));
             
             // 处理域
-            auto region = state.addRegion();
+            auto region = $_state.addRegion();
             region->push_back(new Block());
             for (auto operand : operands) 
                 region->front().addArgument(operand.getType());
@@ -351,11 +348,11 @@ def SW_LaunchOp : SW_Op<"launch", []> {
         static StringRef getCacheWriteAttrNumName() { return "cacheWriteAttrNum"; }
         // 返回cacheRead属性的数量
         unsigned int getNumCacheReadAttributions() {
-            return getAttrOfType<IntegerAttr>(getCacheReadAttrNumName()).getInt();
+            return getOperation()->getAttrOfType<IntegerAttr>(getCacheReadAttrNumName()).getInt();
         }
         // 返回cacheWrite属性的数量
         unsigned int getNumCacheWriteAttributions() {
-            return getAttrOfType<IntegerAttr>(getCacheWriteAttrNumName()).getInt();
+            return getOperation()->getAttrOfType<IntegerAttr>(getCacheWriteAttrNumName()).getInt();
         }
         // 返回所有cacheRead属性
         ArrayRef<BlockArgument> getCacheReadAttributions() {
@@ -411,13 +408,12 @@ def SW_ForOp : SW_Op<"for", [
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value lowerBound, Value upperBound, Value step", [{
+        OpBuilder<(ins "Value":$lowerBound, "Value":$upperBound, "Value":$step), [{
             // 设置上下界以及步长
-            state.addOperands({lowerBound, upperBound, step});
+            $_state.addOperands({lowerBound, upperBound, step});
             
             // 设置迭代变量类型
-            auto region = state.addRegion();
+            auto region = $_state.addRegion();
             region->push_back(new Block());
             Block &bodyBlock = region->front();
             bodyBlock.addArgument(lowerBound.getType());
@@ -469,12 +465,11 @@ def SW_LoadOp : SW_Op<"load", [NoSideEffect]> {
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value input, ValueRange pos", [{
-            state.addOperands(input);
-            state.addOperands(pos);
+        OpBuilder<(ins "Value":$input, "ValueRange":$pos), [{
+            $_state.addOperands(input);
+            $_state.addOperands(pos);
             auto input_type = input.getType().cast<sw::GridType>();
-            state.addTypes(input_type.getElementType());
+            $_state.addTypes(input_type.getElementType());
         }]>
     ];
 
@@ -500,11 +495,10 @@ def SW_StoreOp : SW_Op<"store", [NoSideEffect]> {
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value element, Value outputArray, ValueRange pos", [{
-            state.addOperands(element);
-            state.addOperands(outputArray);
-            state.addOperands(pos);
+        OpBuilder<(ins "Value":$element, "Value":$outputArray, "ValueRange":$pos), [{
+            $_state.addOperands(element);
+            $_state.addOperands(outputArray);
+            $_state.addOperands(pos);
         }]>
     ];
 
@@ -534,17 +528,16 @@ def SW_ConstantOp : SW_Op<"constant", [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Attribute value, TypeRange resultTypes", [{
-            state.addAttribute(getValueAttrName(), value);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "Attribute":$value, "TypeRange":$resultTypes), [{
+            $_state.addAttribute(getValueAttrName(), value);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 
     // 辅助函数
     let extraClassDeclaration = [{
         static StringRef getValueAttrName() { return "value"; }
-        Attribute getValue() { return getAttr("value"); }
+        Attribute getValue() { return getOperation()->getAttr("value"); }
     }];
 }
 
@@ -562,10 +555,10 @@ def SW_GetIDOp : SW_Op<"getID", [
     let results = (outs AnyType:$res);
 
     // 构造函数
+    let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "TypeRange resultTypes", [{
-                state.addTypes(resultTypes);
+        OpBuilder<(ins "TypeRange":$resultTypes), [{
+                $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -590,10 +583,9 @@ def SW_AddfOp : SW_Op<"addf", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "ValueRange":$operands, "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -617,10 +609,9 @@ def SW_AddiOp : SW_Op<"addi", []> {
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "ValueRange":$operands, "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -644,10 +635,9 @@ def SW_SubfOp : SW_Op<"subf", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "ValueRange":$operands, "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -671,10 +661,9 @@ def SW_SubiOp : SW_Op<"subi", []> {
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "ValueRange":$operands, "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -698,10 +687,9 @@ def SW_MulfOp : SW_Op<"mulf", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "ValueRange":$operands, "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -725,10 +713,9 @@ def SW_MuliOp : SW_Op<"muli", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "ValueRange":$operands, "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -751,10 +738,9 @@ def SW_DivfOp : SW_Op<"divf", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands, TypeRange resultTypes", [{
-            state.addOperands(operands);
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "ValueRange":$operands, "TypeRange":$resultTypes), [{
+            $_state.addOperands(operands);
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -776,10 +762,9 @@ def SW_LogicAndOp : SW_Op<"land", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands", [{
-            state.addOperands(operands);
-            state.addTypes(builder.getI32Type());
+        OpBuilder<(ins "ValueRange":$operands), [{
+            $_state.addOperands(operands);
+            $_state.addTypes($_builder.getI32Type());
         }]>
     ]; 
 }
@@ -801,10 +786,9 @@ def SW_LogicOrOp : SW_Op<"lor", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands", [{
-            state.addOperands(operands);
-            state.addTypes(builder.getI32Type());
+        OpBuilder<(ins "ValueRange":$operands), [{
+            $_state.addOperands(operands);
+            $_state.addTypes($_builder.getI32Type());
         }]>
     ]; 
 }
@@ -826,10 +810,9 @@ def SW_LogicNotOp : SW_Op<"lnot", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "ValueRange operands", [{
-            state.addOperands(operands);
-            state.addTypes(builder.getI32Type());
+        OpBuilder<(ins "ValueRange":$operands), [{
+            $_state.addOperands(operands);
+            $_state.addTypes($_builder.getI32Type());
         }]>
     ]; 
 }
@@ -853,18 +836,17 @@ def SW_MemcpyToLDMOp : SW_Op<"memcpyToLDM", []> {
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value src, Value dst, "
-                    "ValueRange pos,"
-                    "int64_t z_dim, int64_t cnt, "
-                    "int64_t stride, int64_t bsize", [{
-            state.addOperands(src);
-            state.addOperands(dst);
-            state.addOperands(pos);
-            state.addAttribute(getZDimAttrName(), builder.getI64IntegerAttr(z_dim));
-            state.addAttribute(getCntAttrName(), builder.getI64IntegerAttr(cnt));
-            state.addAttribute(getStrideAttrName(), builder.getI64IntegerAttr(stride));
-            state.addAttribute(getBsizeAttrName(), builder.getI64IntegerAttr(bsize));
+        OpBuilder<(ins "Value":$src, "Value":$dst,
+                    "ValueRange":$pos,
+                    "int64_t":$z_dim, "int64_t":$cnt, 
+                    "int64_t":$stride, "int64_t":$bsize), [{
+            $_state.addOperands(src);
+            $_state.addOperands(dst);
+            $_state.addOperands(pos);
+            $_state.addAttribute(getZDimAttrName(), $_builder.getI64IntegerAttr(z_dim));
+            $_state.addAttribute(getCntAttrName(), $_builder.getI64IntegerAttr(cnt));
+            $_state.addAttribute(getStrideAttrName(), $_builder.getI64IntegerAttr(stride));
+            $_state.addAttribute(getBsizeAttrName(), $_builder.getI64IntegerAttr(bsize));
         }]>
     ];
 
@@ -897,17 +879,16 @@ def SW_MemcpyToMEMOp : SW_Op<"memcpyToMEM", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value src, Value dst, "
-                    "ValueRange pos, int64_t z_dim, int64_t cnt, "
-                    "int64_t stride, int64_t bsize", [{
-            state.addOperands(src);
-            state.addOperands(dst);
-            state.addOperands(pos);
-            state.addAttribute(getZDimAttrName(), builder.getI64IntegerAttr(z_dim));
-            state.addAttribute(getCntAttrName(), builder.getI64IntegerAttr(cnt));
-            state.addAttribute(getStrideAttrName(), builder.getI64IntegerAttr(stride));
-            state.addAttribute(getBsizeAttrName(), builder.getI64IntegerAttr(bsize));
+        OpBuilder<(ins "Value":$src, "Value":$dst, 
+                    "ValueRange":$pos, "int64_t":$z_dim, "int64_t":$cnt,
+                    "int64_t":$stride, "int64_t":$bsize), [{
+            $_state.addOperands(src);
+            $_state.addOperands(dst);
+            $_state.addOperands(pos);
+            $_state.addAttribute(getZDimAttrName(), $_builder.getI64IntegerAttr(z_dim));
+            $_state.addAttribute(getCntAttrName(), $_builder.getI64IntegerAttr(cnt));
+            $_state.addAttribute(getStrideAttrName(), $_builder.getI64IntegerAttr(stride));
+            $_state.addAttribute(getBsizeAttrName(), $_builder.getI64IntegerAttr(bsize));
         }]>
     ];
 
@@ -936,11 +917,11 @@ def SW_VectorLoadUOp : SW_Op<"vectorLoadU", []> {
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, Value dst, "
-                    "Value src, ValueRange pos", [{
-            state.addOperands(dst);
-            state.addOperands(src);
-            state.addOperands(pos);
+        OpBuilder<(ins "Value":$dst, 
+                    "Value":$src, "ValueRange":$pos), [{
+            $_state.addOperands(dst);
+            $_state.addOperands(src);
+            $_state.addOperands(pos);
         }]>
     ];
 }
@@ -962,11 +943,10 @@ def SW_VectorStoreUOp : SW_Op<"vectorStoreU", []> {
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value src, Value dst, ValueRange pos", [{
-            state.addOperands(src);
-            state.addOperands(dst);
-            state.addOperands(pos);
+        OpBuilder<(ins "Value":$src, "Value":$dst, "ValueRange":$pos), [{
+            $_state.addOperands(src);
+            $_state.addOperands(dst);
+            $_state.addOperands(pos);
         }]>
     ];
 }
@@ -987,11 +967,11 @@ def SW_VectorLoadOp : SW_Op<"vectorLoad", []> {
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, Value dst, "
-                    "Value src, ValueRange pos", [{
-            state.addOperands(dst);
-            state.addOperands(src);
-            state.addOperands(pos);
+        OpBuilder<(ins "Value":$dst,
+                    "Value":$src, "ValueRange":$pos), [{
+            $_state.addOperands(dst);
+            $_state.addOperands(src);
+            $_state.addOperands(pos);
         }]>
     ];
 }
@@ -1012,10 +992,10 @@ def SW_VectorBroadCastOp : SW_Op<"vectorBroadCast", []> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, Value input, "
-        "unsigned vectorWidth", [{
-            state.addOperands(input);
-            state.addTypes(VectorType::get(vectorWidth, input.getType().cast<FloatType>()));
+        OpBuilder<(ins "Value":$input, 
+        "unsigned":$vectorWidth), [{
+            $_state.addOperands(input);
+            $_state.addTypes(VectorType::get(vectorWidth, input.getType().cast<FloatType>()));
         }]>
     ];
 }
@@ -1033,10 +1013,10 @@ def SW_AllocOp : SW_Op<"alloc", []> {
     let results = (outs SW_MemRef:$res);
 
     // 构造函数
+    let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "TypeRange resultTypes", [{
-            state.addTypes(resultTypes);
+        OpBuilder<(ins "TypeRange":$resultTypes), [{
+            $_state.addTypes(resultTypes);
         }]>
     ];
 }
@@ -1055,9 +1035,8 @@ def SW_DeAllocOp : SW_Op<"dealloc", []> {
     let skipDefaultBuilders = 1;
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value operand", [{
-            state.addOperands(operand);
+        OpBuilder<(ins "Value":$operand), [{
+            $_state.addOperands(operand);
         }]>
     ];
 }
@@ -1075,8 +1054,8 @@ def SW_GetMpiRankOp : SW_Op<"getMpiRank",[]> {
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state", [{
-            state.addTypes({builder.getI32Type()});
+        OpBuilder<(ins), [{
+            $_state.addTypes({$_builder.getI32Type()});
         }]>
     ];
 }
@@ -1098,13 +1077,12 @@ def SW_MpiExchangeHaloOp : SW_Op<"mpiExchangeHalo", []> {
     
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value dataArray, Value rank, ArrayRef<int64_t> mpiTile,"
-                    "ArrayRef<int64_t> mpiHaloL, ArrayRef<int64_t> mpiHaloU", [{
-            state.addOperands({dataArray, rank});
-            state.addAttribute(getMpiTileName(), builder.getI64ArrayAttr(mpiTile));
-            state.addAttribute(getMpiHaloLName(), builder.getI64ArrayAttr(mpiHaloL));
-            state.addAttribute(getMpiHaloUName(), builder.getI64ArrayAttr(mpiHaloU));
+        OpBuilder<(ins "Value":$dataArray, "Value":$rank, "ArrayRef<int64_t>":$mpiTile,
+                    "ArrayRef<int64_t>":$mpiHaloL, "ArrayRef<int64_t>":$mpiHaloU), [{
+            $_state.addOperands({dataArray, rank});
+            $_state.addAttribute(getMpiTileName(), $_builder.getI64ArrayAttr(mpiTile));
+            $_state.addAttribute(getMpiHaloLName(), $_builder.getI64ArrayAttr(mpiHaloL));
+            $_state.addAttribute(getMpiHaloUName(), $_builder.getI64ArrayAttr(mpiHaloU));
         }]>
     ];
 
@@ -1152,37 +1130,33 @@ def SW_IfOp : SW_Op<"if",
     // 构造函数
     let skipDefaultBuilders = 1;
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value cond, bool withElseRegion", [{
+        OpBuilder<(ins "Value":$cond, "bool":$withElseRegion), [{
             auto addTerminator = [&](OpBuilder &nested, Location loc) {
                 IfOp::ensureTerminator(*nested.getInsertionBlock()->getParent(),
                     nested, loc);
             };
 
-            build(builder, state, cond, addTerminator, 
+            build($_builder, $_state, cond, addTerminator, 
                     withElseRegion ? addTerminator 
                     : function_ref<void(OpBuilder &, Location)>());
         }]>,
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "Value cond, "
-                    "function_ref<void(OpBuilder &, Location)> thenBuilder "
-                    " = buildIfOpTerminatedBody, "
-                    "function_ref<void(OpBuilder &, Location)> elseBuilder "
-                    " = nullptr", [{
+        OpBuilder<(ins "Value":$cond,
+                    CArg<"function_ref<void(OpBuilder &, Location)>", "buildIfOpTerminatedBody">:$thenBuilder, 
+                    CArg<"function_ref<void(OpBuilder &, Location)>","nullptr">:$elseBuilder), [{
             assert(thenBuilder && "the builder callback for 'then' must be present");
 
-            state.addOperands(cond);
+            $_state.addOperands(cond);
             
-            OpBuilder::InsertionGuard guard(builder);
-            Region *thenRegion = state.addRegion();
-            builder.createBlock(thenRegion);
-            thenBuilder(builder, state.location);
+            OpBuilder::InsertionGuard guard($_builder);
+            Region *thenRegion = $_state.addRegion();
+            $_builder.createBlock(thenRegion);
+            thenBuilder($_builder, $_state.location);
 
-            Region *elseRegion = state.addRegion();
+            Region *elseRegion = $_state.addRegion();
             if (!elseBuilder)
                 return;
-            builder.createBlock(elseRegion);
-            elseBuilder(builder, state.location);
+            $_builder.createBlock(elseRegion);
+            elseBuilder($_builder, $_state.location);
         }]>
     ];
 
@@ -1233,12 +1207,11 @@ def SW_CmpOp : SW_Op<"cmp" , [
 
     // 构造函数
     let builders = [
-        OpBuilder<"OpBuilder &builder, OperationState &state, "
-                    "mlir::sw::SWCmpPredicate predicate, Value lhs, Value rhs", [{
-            state.addOperands({lhs, rhs});
-            state.addAttribute(CmpOp::getPredicateAttrName(),
-                    builder.getI64IntegerAttr(static_cast<int64_t>(predicate)));
-            state.addTypes(builder.getI32Type());
+        OpBuilder<(ins "mlir::sw::SWCmpPredicate":$predicate, "Value":$lhs, "Value":$rhs), [{
+            $_state.addOperands({lhs, rhs});
+            $_state.addAttribute(CmpOp::getPredicateAttrName(),
+                    $_builder.getI64IntegerAttr(static_cast<int64_t>(predicate)));
+            $_state.addTypes($_builder.getI32Type());
         }]>
     ];
 
@@ -1251,7 +1224,7 @@ def SW_CmpOp : SW_Op<"cmp" , [
             return pred.getValue();
         }
         mlir::sw::SWCmpPredicate getPredicate() {
-            return (mlir::sw::SWCmpPredicate)getAttrOfType<IntegerAttr>(getPredicateAttrName()).getInt();
+            return (mlir::sw::SWCmpPredicate)getOperation()->getAttrOfType<IntegerAttr>(getPredicateAttrName()).getInt();
         }
     }];
 }

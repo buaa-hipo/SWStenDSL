@@ -35,6 +35,8 @@ enum Token : int {
     tok_bracket_close = '}',
     tok_sbracket_open = '[',
     tok_sbracket_close = ']',
+    tok_minus = '-',
+
 
     tok_eof = -1,
 

@@ -11,10 +11,9 @@
 
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
-#include <mlir/IR/Function.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
-#include <mlir/IR/Module.h>
-#include <mlir/IR/StandardTypes.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Verifier.h>
 #include <mlir/Dialect/StandardOps/IR/Ops.h>
 
@@ -64,7 +63,7 @@ public:
             return nullptr;
 
         // stencil部分可能返回多个func (多次迭代情况下会返回两个func, 而单次迭代则只会返回一个func)
-        for (int i= 0; i < stencil.size(); i++)
+        for (unsigned i= 0; i < stencil.size(); i++)
             theModule.push_back(stencil[i]);
 
         // 在构建完成后对module进行检查
@@ -105,7 +104,7 @@ private:
 
     // 辅助函数, 负责将AST中的location转化为MLIR的location
     mlir::Location loc(swsten::Location loc) {
-        return builder.getFileLineColLoc(builder.getIdentifier(*loc.file), loc.line, loc.col);
+        return mlir::FileLineColLoc::get(builder.getIdentifier(*loc.file), loc.line, loc.col);
     }
 
     // 在当前范围内声明一个变量, 如果该变量还未被声明则返回成功, 该函数负责管理计算函数的符号表
@@ -123,6 +122,7 @@ private:
         if (res != iterFuncSymbolTable.end())
             return mlir::failure();
         iterFuncSymbolTable[name] = value;
+        return mlir::success();
     }
 
     // 根据给定的维度大小及元素类型构造mlir中类型(数组)
@@ -195,7 +195,7 @@ private:
         llvm::SmallVector<mlir::Type, 4> argTypes;
         llvm::SmallVector<llvm::StringRef, 4> argNames;
         llvm::SmallVector<mlir::StringRef, 4> argNamesForIterationOp;
-        for (int i = 0; i < stencilAST.getArgs().size(); i++) {
+        for (unsigned i = 0; i < stencilAST.getArgs().size(); i++) {
             auto argItem = stencilAST.getArgs()[i].get();
             mlir::Type type = getType(*argItem);
             llvm::StringRef name = (*argItem).getName();
@@ -247,7 +247,7 @@ private:
         builder.setInsertionPointToStart(&entryBlock);
         // 生成函数体内部(kernel)的内容
         auto kernelList = std::move(stencilAST.getKernelList());
-        for (int kernelASTIter = 0; kernelASTIter < kernelList.size(); kernelASTIter++) {
+        for (unsigned kernelASTIter = 0; kernelASTIter < kernelList.size(); kernelASTIter++) {
             if (failed(mlirGen(*(kernelList[kernelASTIter])))) {
                 computeFuncOp.erase();
                 return retFuncList;

@@ -251,7 +251,7 @@ private:
                 // 解析kernel名称
                 if (lexer.getCurToken() != tok_identifier)
                     return parseError<StencilAST>("kernel name", "in stencil define body");
-                    operation = lexer.getId().str();
+                operation = lexer.getId().str();
                 lexer.consume(tok_identifier);
 
                 // 解析右括号
@@ -271,7 +271,7 @@ private:
         lexer.consume(Token('}'));
 
         // 遍历整个参数列表, 根据解析得到的访问模式, 设置参数列表中的相应数组的访问模式
-        for (int argIter = 0; argIter < args.size(); argIter++) {
+        for (unsigned argIter = 0; argIter < args.size(); argIter++) {
             args[argIter]->setArrayType(arrayNameAndAccessPatternMapping[args[argIter]->getName().str()]);
         }
         return std::make_unique<StencilAST>(loc, std::move(kernelList), stencilName, std::move(args), iteration, mpiTile, mpiHalo, operation);

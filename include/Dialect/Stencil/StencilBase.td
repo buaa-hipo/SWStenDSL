@@ -9,7 +9,7 @@ include "mlir/IR/OpBase.td"
 def Stencil_Dialect : Dialect {
     let name = "stencil";
     let description = [{Stencil Dialect for general expression. }];
-    let cppNamespace = "stencil";
+    let cppNamespace = "::mlir::stencil";
 }
 
 //============================================================================//

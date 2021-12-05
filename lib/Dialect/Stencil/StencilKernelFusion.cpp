@@ -13,17 +13,17 @@
 #include <mlir/IR/AffineMap.h>
 #include <mlir/IR/BlockAndValueMapping.h>
 #include <mlir/IR/Builders.h>
-#include <mlir/IR/Function.h>
+#include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/MLIRContext.h>
-#include <mlir/IR/Module.h>
 #include <mlir/IR/PatternMatch.h>
-#include <mlir/IR/StandardTypes.h>
+#include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/UseDefLists.h>
 #include <mlir/IR/Value.h>
 #include <mlir/Pass/Pass.h>
 #include <mlir/Support/LLVM.h>
 #include <mlir/Support/LogicalResult.h>
 #include <mlir/Transforms/DialectConversion.h>
+#include <mlir/Transforms/GreedyPatternRewriteDriver.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/None.h>
 #include <llvm/ADT/STLExtras.h>
@@ -123,7 +123,7 @@ struct StencilKernelFusionInliningRewrite : public StencilKernelFusionPattern {
                     for (auto it : inliningCache[accessOp.field()]) {
                         if (std::get<0>(it) == offset &&
                             std::get<1>(it).getParentRegion()->isAncestor(
-                                accessOp.getParentRegion())) {
+                                accessOp->getParentRegion())) {
                             rewriter.replaceOp(accessOp, std::get<1>(it));
                             return;
                         }
@@ -204,9 +204,9 @@ void StencilKernelFusionPass::runOnFunction() {
         return;
     }
     
-    OwningRewritePatternList patterns;
+    OwningRewritePatternList patterns(&getContext());
     patterns.insert<StencilKernelFusionInliningRewrite>(&getContext());
-    applyPatternsAndFoldGreedily(funcOp, patterns);
+    (void)applyPatternsAndFoldGreedily(funcOp, std::move(patterns));
 }
 
 } // end of anonymous namespace

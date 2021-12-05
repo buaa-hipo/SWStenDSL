@@ -28,38 +28,6 @@ namespace SWTypeStorage {
 // sw方言变量存储类型
 //============================================================================//
 // GridTypeStorage 存储类
-struct GridTypeStorage : public TypeStorage {
-    Type elementType;
-    const size_t size;
-    const int64_t *shape;
-
-    GridTypeStorage(Type elementTy, size_t size, const int64_t *shape)
-        : TypeStorage(), elementType(elementTy), size(size), shape(shape) {}
-    
-    // 哈希键
-    using KeyTy = std::pair<Type, ArrayRef<int64_t>>;
-
-    bool operator==(const KeyTy &key) const {
-        return key == KeyTy(elementType, getShape());
-    }
-
-    Type getElementType() const { return elementType; }
-    ArrayRef<int64_t> getShape() const { return {shape, size}; }
-};
-
-// MemRefTypeStorage 存储类
-struct MemRefTypeStorage : public GridTypeStorage {
-    using GridTypeStorage::GridTypeStorage;
-
-    // 构造
-    static MemRefTypeStorage *construct(TypeStorageAllocator &allocator,
-                                        const KeyTy &key) {
-        // 复制域的各个维度
-        ArrayRef<int64_t> shape = allocator.copyInto(key.second);
-        return new (allocator.allocate<MemRefTypeStorage>())
-                MemRefTypeStorage(key.first, shape.size(), shape.data());
-    }
-};
 } // end of namespace SWTypeStorage
 
 //============================================================================//

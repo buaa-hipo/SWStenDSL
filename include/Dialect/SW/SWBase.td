@@ -9,7 +9,7 @@ include "mlir/IR/OpBase.td"
 def SW_Dialect : Dialect {
     let name ="sw";
     let description = [{ SW Dialect for general expression }];
-    let cppNamespace = "sw";
+    let cppNamespace = "::mlir::sw";
 }
 
 //============================================================================//

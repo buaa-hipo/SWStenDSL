@@ -38,7 +38,7 @@ static sw::FuncOp outlineKernelFuncImpl(sw::LaunchOp launchOp, StringRef kernelF
         kernelOperandTypes.push_back(operand.getType());
     }
     FunctionType type =
-        FunctionType::get(kernelOperandTypes, {}, launchOp.getContext());
+        FunctionType::get(launchOp.getContext(),kernelOperandTypes, {});
     auto outlinedFunc = builder.create<sw::FuncOp>(loc, kernelFnName, type, 
                                                 cacheReadAttr, cacheWriteAttr);
     // 删除操作自行生成的Block
@@ -83,7 +83,7 @@ public:
             Block::iterator insertPt(func.getOperation());
             auto funcWalkResult = func.walk([&](sw::LaunchOp op) {
                 std::string kernelFnName = 
-                    Twine(op.getParentOfType<sw::MainFuncOp>().getName(), "_kernel").str() + std::to_string(kernelCounter);
+                    Twine(op->getParentOfType<sw::MainFuncOp>().getName(), "_kernel").str() + std::to_string(kernelCounter);
                 kernelCounter ++;
 
                 SmallVector<Type, 8> cacheReadAttr;
