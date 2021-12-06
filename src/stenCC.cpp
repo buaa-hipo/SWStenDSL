@@ -172,6 +172,12 @@ int main(int argc, char *argv[])
     mlir::registerMLIRContextCLOptions();
     mlir::registerPassManagerCLOptions();
 
+    mlir::DialectRegistry registry;
+    registry.insert<mlir::stencil::StencilDialect>();
+    registry.insert<mlir::StandardOpsDialect>();
+    registry.insert<mlir::sw::SWDialect>();
+    registerAllDialects(registry);
+
     cl::ParseCommandLineOptions(argc, argv, "SWSten compiler\n");
 
     if (emitAction == Action::DumpAST)
