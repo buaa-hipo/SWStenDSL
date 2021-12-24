@@ -3,7 +3,7 @@
 
 include "mlir/Pass/PassBase.td"
 
-def StencilKernelFusionPass : FunctionPass<"kernel-fusion"> {
+def StencilKernelFusionPass : Pass<"kernel-fusion", "ModuleOp"> {
     let summary = "kernel fusion";
     let constructor = "mlir::createStencilKernelFusionPass()";
 }

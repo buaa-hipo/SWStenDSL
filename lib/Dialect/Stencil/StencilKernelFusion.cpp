@@ -183,34 +183,35 @@ struct StencilKernelFusionInliningRewrite : public StencilKernelFusionPattern {
 // Rewriting pass
 //============================================================================//
 struct StencilKernelFusionPass : public StencilKernelFusionPassBase<StencilKernelFusionPass> {
-    void runOnFunction() override;
+    void runOnOperation() override;
 };
 
-void StencilKernelFusionPass::runOnFunction() {
-    FuncOp funcOp = getFunction();
-    if (!StencilDialect::isStencilProgram(funcOp))
-        return;
-
-    // 执行kernel fusion之前不能进行循环展开操作
-    bool hasUnrolledStencils = false;
-    funcOp.walk([&](stencil::ReturnOp returnOp) {
-        if (returnOp.unroll().hasValue()) {
-            returnOp.emitOpError("execute stencil kernel fusion after stencil unrolling");
-            hasUnrolledStencils = true;
-        }
-    });
-    if (hasUnrolledStencils) {
-        signalPassFailure();
-        return;
-    }
-    
+void StencilKernelFusionPass::runOnOperation() {
+    auto moduleOp = getOperation();
     OwningRewritePatternList patterns(&getContext());
     patterns.insert<StencilKernelFusionInliningRewrite>(&getContext());
-    (void)applyPatternsAndFoldGreedily(funcOp, std::move(patterns));
+
+    moduleOp.walk([&](FuncOp funcOp) {
+        if (StencilDialect::isStencilProgram(funcOp)) {
+            // 执行kernel fusion之前不能进行循环展开操作
+            bool hasUnrolledStencils = false;
+            funcOp.walk([&](stencil::ReturnOp returnOp) {
+                if (returnOp.unroll().hasValue()) {
+                    returnOp.emitOpError("execute stencil kernel fusion after stencil unrolling");
+                    hasUnrolledStencils = true;
+                }
+            });
+            if (hasUnrolledStencils) {
+                signalPassFailure();
+                return;
+            }
+            (void)applyPatternsAndFoldGreedily(funcOp, std::move(patterns));
+        }
+    });
 }
 
 } // end of anonymous namespace
 
-std::unique_ptr<OperationPass<FuncOp>> mlir::createStencilKernelFusionPass() {
+std::unique_ptr<Pass> mlir::createStencilKernelFusionPass() {
     return std::make_unique<StencilKernelFusionPass>();
 }

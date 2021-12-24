@@ -17,7 +17,7 @@ namespace mlir {
 
 class Pass;
 
-std::unique_ptr<OperationPass<FuncOp>> createStencilKernelFusionPass();
+std::unique_ptr<Pass> createStencilKernelFusionPass();
 
 //===----------------------------------------------------------------------===//
 // 注册
